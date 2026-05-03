@@ -1,0 +1,283 @@
+@import "tailwindcss";
+
+/* ============================================================
+   FISENT - DESIGN SYSTEM (CSS Variables Centralizadas)
+   ============================================================
+   Todos los estilos del proyecto referencian estas variables.
+   Para cambiar el tema, solo modifica este archivo.
+   ============================================================ */
+
+:root {
+  /* --- Colors: Primary (Teal) --- */
+  --color-primary-50: #f0fdfa;
+  --color-primary-100: #ccfbf1;
+  --color-primary-200: #99f6e4;
+  --color-primary-300: #5eead4;
+  --color-primary-400: #2dd4bf;
+  --color-primary-500: #14b8a6;
+  --color-primary-600: #0d9488;
+  --color-primary-700: #0f766e;
+  --color-primary-800: #115e59;
+  --color-primary-900: #134e4a;
+
+  /* --- Colors: Secondary (Emerald) --- */
+  --color-secondary-50: #ecfdf5;
+  --color-secondary-100: #d1fae5;
+  --color-secondary-200: #a7f3d0;
+  --color-secondary-300: #6ee7b7;
+  --color-secondary-400: #34d399;
+  --color-secondary-500: #10b981;
+  --color-secondary-600: #059669;
+  --color-secondary-700: #047857;
+
+  /* --- Colors: Neutral (Gray) --- */
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+
+  /* --- Colors: Semantic --- */
+  --color-success: #10b981;
+  --color-success-light: #d1fae5;
+  --color-success-dark: #047857;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-warning-dark: #b45309;
+  --color-danger: #ef4444;
+  --color-danger-light: #fee2e2;
+  --color-danger-dark: #b91c1c;
+  --color-info: #3b82f6;
+  --color-info-light: #dbeafe;
+  --color-info-dark: #1d4ed8;
+
+  /* --- Sidebar --- */
+  --sidebar-width-expanded: 16rem;
+  --sidebar-width-collapsed: 5rem;
+  --sidebar-bg-from: #0f172a;
+  --sidebar-bg-via: #134e4a;
+  --sidebar-bg-to: #0f172a;
+
+  /* --- Spacing --- */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* --- Border Radius --- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* --- Shadows --- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.04);
+
+  /* --- Typography --- */
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+
+  /* --- Transitions --- */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* --- Z-Index --- */
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+
+  /* --- Breakpoints (for reference, Tailwind handles these) --- */
+  /* sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px */
+
+  /* --- Layout --- */
+  --header-height: 3.5rem;
+  --content-max-width: 80rem;
+  --content-padding-mobile: 1rem;
+  --content-padding-tablet: 1.5rem;
+  --content-padding-desktop: 2rem;
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-neutral-50);
+  color: var(--color-neutral-800);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-300);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-400);
+}
+
+/* ============================================================
+   FOCUS & ACCESSIBILITY
+   ============================================================ */
+
+*:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
+::selection {
+  background-color: rgba(13, 148, 136, 0.2);
+  color: var(--color-primary-700);
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fade-in { animation: fadeIn var(--transition-normal); }
+.animate-slide-up { animation: slideUp var(--transition-slow); }
+.animate-slide-down { animation: slideDown var(--transition-normal); }
+.animate-slide-in-left { animation: slideInLeft var(--transition-slow); }
+
+/* ============================================================
+   RESPONSIVE UTILITIES
+   ============================================================ */
+
+/* Hide on mobile */
+@media (max-width: 639px) {
+  .hide-mobile { display: none !important; }
+}
+
+/* Hide on tablet+ */
+@media (min-width: 768px) {
+  .mobile-only { display: none !important; }
+}
+
+/* Show only on tablet+ */
+@media (max-width: 767px) {
+  .tablet-up-only { display: none !important; }
+}
+
+/* Show only on desktop */
+@media (max-width: 1023px) {
+  .desktop-only { display: none !important; }
+}
+
+/* ============================================================
+   PRINT STYLES
+   ============================================================ */
+
+@media print {
+  aside, header, button, .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS
+   ============================================================ */
+
+@media (max-width: 639px) {
+  html {
+    font-size: 14px;
+  }
+
+  /* Prevent zoom on input focus (iOS) */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Touch-friendly tap targets */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Smaller modals on mobile */
+  .modal-mobile-full {
+    border-radius: 0 !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+  }
+}
+
+/* ============================================================
+   TABLET OPTIMIZATIONS
+   ============================================================ */
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .tablet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-lg);
+  }
+}
