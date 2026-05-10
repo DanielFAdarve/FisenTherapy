@@ -28,18 +28,19 @@ export const patientService = {
     getAll: async (search?: string, page = 1, limit = 20) => {
 
     //Use for fet by PARAMS to search and pagination
-    // const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-    // if (search) params.set('search', search);
-    // const res = await api.get<BackendResponse<Patient[]>>(`/patient?${params}`);
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search) params.set('search', search);
+    const res = await api.get<BackendResponse<Patient[]>>(`/patient/get-patients?${params}`);
     
-    const res = await api.get<BackendResponse<Patient[]>>(`/patient/get-patients`);
-    if(search){
-      return res.data.response.filter((p) =>
-        p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        p.apellido.toLowerCase().includes(search.toLowerCase()) ||
-        p.num_doc.includes(search)
-      );
-    }
+    // const res = await api.get<BackendResponse<Patient[]>>(`/patient/get-patients`);
+    // if(search){
+      // return res.data.response.filter((p) =>
+        // p.nombre.toLowerCase().includes(search.toLowerCase()) ||
+        // p.apellido.toLowerCase().includes(search.toLowerCase()) ||
+        // p.num_doc.includes(search)
+      // );
+    // }
+    console.log("Respuesta pacientes:",res.data.response);
     return res.data.response;
   },
   getById: async (id: number) => {
