@@ -6,7 +6,7 @@ import { cie10Service } from '../data-access/services';
 import { Cie10, Cie10CreateDTO } from '../domain/models';
 import { cie10Schema, Cie10FormData } from '../domain/schemas';
 import {
-  Card, Button, Input, Textarea, Modal, Badge, TableSkeleton, EmptyState, PageHeader, SearchInput,
+  Card, Button, Input, Textarea, Modal, TableSkeleton, EmptyState, PageHeader, SearchInput,
 } from '../components/ui/Components';
 import { BookOpen, Plus, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
