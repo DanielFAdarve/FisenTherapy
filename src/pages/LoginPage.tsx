@@ -5,7 +5,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginSchema, LoginFormData } from '../domain/schemas';
-import { Activity, Eye, EyeOff, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {

@@ -524,3 +524,82 @@ export function MobileBottomNav({ items, active, onChange }: {
     </div>
   );
 }
+
+// --- Pagination Controls ---
+export function PaginationControls({
+  page,
+  limit,
+  total,
+  totalPages,
+  hasNextPage,
+  hasPreviousPage,
+  onPageChange,
+  onLimitChange,
+  isLoading = false,
+  limitOptions = [10, 20, 50, 100],
+}: {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  onPageChange: (page: number) => void;
+  onLimitChange?: (limit: number) => void;
+  isLoading?: boolean;
+  limitOptions?: number[];
+}) {
+  const safeTotalPages = Math.max(totalPages || 1, 1);
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs font-medium text-gray-500">
+        Mostrando <span className="font-bold text-gray-700">{from}-{to}</span> de <span className="font-bold text-gray-700">{total}</span> registros
+      </p>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {onLimitChange && (
+          <label className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+            Por página
+            <select
+              value={limit}
+              onChange={(event) => onLimitChange(Number(event.target.value))}
+              disabled={isLoading}
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 focus:border-teal-500 focus:outline-none disabled:opacity-50"
+            >
+              {limitOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onPageChange(page - 1)}
+            disabled={isLoading || !hasPreviousPage}
+          >
+            Anterior
+          </Button>
+          <span className="min-w-[92px] text-center text-xs font-bold text-gray-600">
+            Página {page} de {safeTotalPages}
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onPageChange(page + 1)}
+            disabled={isLoading || !hasNextPage}
+          >
+            Siguiente
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

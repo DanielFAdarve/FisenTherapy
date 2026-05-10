@@ -3,10 +3,25 @@
 // ============================================================
 
 // --- Respuesta Backend Normalizada ---
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
 export interface BackendResponse<T = unknown> {
   status: number;
   message: string;
   response: T;
+  pagination?: Pagination;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  pagination?: Pagination;
 }
 
 // --- Auth ---
@@ -208,14 +223,14 @@ export interface PaginationParams {
   page?: number;
   limit?: number;
   search?: string;
+  filters?: Record<string, string | number | boolean | null | undefined>;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface PaginatedResponse<T> {
   data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+  pagination?: Pagination;
 }
 
 export type LoadingState = 'idle' | 'loading' | 'success' | 'error';

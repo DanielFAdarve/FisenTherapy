@@ -3,14 +3,15 @@
 // ============================================================
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { patientService, cie10Service } from '../data-access/services';
-import { Patient, PatientCreateDTO, Cie10, TipoDocumento } from '../domain/models';
+import { Patient, PatientCreateDTO, Cie10, TipoDocumento, PaginationParams } from '../domain/models';
 import { patientSchema, PatientFormData } from '../domain/schemas';
 import {
   Card, Button, Input, Select, Textarea, Modal, Badge, TableSkeleton,
-  EmptyState, ConfirmDialog, PageHeader, SearchInput, Avatar,
+  EmptyState, ConfirmDialog, PageHeader, SearchInput, Avatar, PaginationControls, Alert,
 } from '../components/ui/Components';
 import { Users, Plus, Edit2, Trash2, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { usePaginatedResource } from '../hooks/usePaginatedResource';
 
 const TIPO_DOC_OPTIONS = [
   { value: 'CC', label: 'Cedula de Ciudadania' },
@@ -36,9 +37,20 @@ const emptyForm: PatientFormData = {
 const avatarColors = ['teal', 'blue', 'purple', 'amber', 'emerald', 'rose'] as const;
 
 export default function PatientsPage() {
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const fetchPatients = useCallback((params: PaginationParams, signal?: AbortSignal) => patientService.getPaginated(params, signal), []);
+  const {
+    data: patients,
+    pagination,
+    loading,
+    error,
+    page,
+    limit,
+    search,
+    setPage,
+    setLimit,
+    setSearch,
+    refresh: loadPatients,
+  } = usePaginatedResource<Patient>({ fetcher: fetchPatients });
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
@@ -48,18 +60,6 @@ export default function PatientsPage() {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
-  const loadPatients = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await patientService.getAll(search);
-      setPatients(data || []);
-    } catch (err: any) {
-      toast.error(err?.message || 'Error al cargar pacientes');
-    } finally {
-      setLoading(false);
-    }
-  }, [search]);
-
   const loadCie10 = useCallback(async () => {
     try {
       const data = await cie10Service.getAll();
@@ -67,7 +67,6 @@ export default function PatientsPage() {
     } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { loadPatients(); }, [loadPatients]);
   useEffect(() => { loadCie10(); }, [loadCie10]);
 
   const openCreate = () => {
@@ -144,13 +143,14 @@ export default function PatientsPage() {
       <PageHeader
         icon={<Users className="w-6 h-6" />}
         title="Pacientes"
-        subtitle={`${patients.length} pacientes registrados`}
+        subtitle={`${pagination?.total ?? patients.length} pacientes registrados`}
         action={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />Nuevo Paciente</Button>}
       />
 
       <Card>
-        <div className="p-4">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o documento..." />
+        <div className="p-4 space-y-3">
+          <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, apellido o documento..." />
+          {error && <Alert type="error" title="Error al cargar pacientes" message={error} />}
         </div>
       </Card>
 
@@ -162,7 +162,7 @@ export default function PatientsPage() {
           <EmptyState
             icon={<Users className="w-12 h-12" />}
             title="No hay pacientes"
-            description="Comience registrando su primer paciente"
+            description={search ? 'No hay resultados para la búsqueda actual' : 'Comience registrando su primer paciente'}
             action={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />Nuevo Paciente</Button>}
           />
         ) : (
@@ -220,6 +220,19 @@ export default function PatientsPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {pagination && (
+          <PaginationControls
+            page={page}
+            limit={limit}
+            total={pagination.total}
+            totalPages={pagination.totalPages}
+            hasNextPage={pagination.hasNextPage}
+            hasPreviousPage={pagination.hasPreviousPage}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+            isLoading={loading}
+          />
         )}
       </Card>
 

@@ -2,6 +2,7 @@
 // FISENT - API SERVICES (fuertemente tipados por endpoint)
 // ============================================================
 import api from './api';
+import { buildQueryParams, fallbackPagination } from './pagination';
 import {
   BackendResponse,
   LoginRequest, LoginResponse,
@@ -12,12 +13,13 @@ import {
   ClinicalHistory, ClinicalHistoryCreateDTO,
   Cie10, Cie10CreateDTO,
   Payment, PaymentCreateDTO, PaymentSummary,
+  PaginationParams, PaginatedResult,
 } from '../domain/models';
 
 // --- Auth Service ---
 export const authService = {
   login: async (data: LoginRequest) => {
-  // const res = await api.post<BackendResponse<LoginResponse>>('/auth/login', data);
+    // Login es una excepción documentada: retorna { token } sin envelope BackendResponse.
     const res = await api.post<LoginResponse>('/auth/login', data);
     return res.data;
   },
@@ -25,61 +27,62 @@ export const authService = {
 
 // --- Patient Service ---
 export const patientService = {
-    getAll: async (search?: string, page = 1, limit = 20) => {
+  getPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<Patient>> => {
+    const query = buildQueryParams(params);
+    const res = await api.get<BackendResponse<Patient[]>>(`/patient/get-patients?${query}`, { signal });
 
-    //Use for fet by PARAMS to search and pagination
-    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-    if (search) params.set('search', search);
-    const res = await api.get<BackendResponse<Patient[]>>(`/patient/get-patients?${params}`);
-    
-    // const res = await api.get<BackendResponse<Patient[]>>(`/patient/get-patients`);
-    // if(search){
-      // return res.data.response.filter((p) =>
-        // p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        // p.apellido.toLowerCase().includes(search.toLowerCase()) ||
-        // p.num_doc.includes(search)
-      // );
-    // }
-    console.log("Respuesta pacientes:",res.data.response);
-    return res.data.response;
+    return {
+      data: res.data.response,
+      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+    };
+  },
+  getAll: async (search?: string, page = 1, limit = 20) => {
+    const result = await patientService.getPaginated({ search, page, limit });
+    return result.data;
   },
   getById: async (id: number) => {
-    const res = await api.get<BackendResponse<Patient>>(`/patient/${id}`);
+    const res = await api.get<BackendResponse<Patient>>(`/patient/get-patient/${id}`);
+    return res.data.response;
+  },
+  getByDocument: async (documentNumber: string) => {
+    const res = await api.get<BackendResponse<Patient>>(`/patient/get-patient-by-doc/${documentNumber}`);
     return res.data.response;
   },
   create: async (data: PatientCreateDTO) => {
-    const res = await api.post<BackendResponse<Patient>>('/patient', data);
+    const res = await api.post<BackendResponse<Patient>>('/patient/create-patient', data);
     return res.data.response;
   },
   update: async (data: PatientUpdateDTO) => {
     const { id, ...rest } = data;
-    const res = await api.put<BackendResponse<Patient>>(`/patient/${id}`, rest);
+    const res = await api.put<BackendResponse<Patient>>(`/patient/update-patient/${id}`, rest);
     return res.data.response;
   },
   delete: async (id: number) => {
-    const res = await api.delete<BackendResponse<null>>(`/patient/${id}`);
+    const res = await api.delete<BackendResponse<null>>(`/patient/delete-patient/${id}`);
     return res.data;
   },
 };
 
 // --- Package Service ---
 export const packageService = {
-  getAll: async (idPaciente?: number) => {
-    // const params = idPaciente ? `?id_paciente=${idPaciente}` : '';
-    // const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages${params}`);
-    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-packages`);
+  getAll: async () => {
+    const res = await api.get<BackendResponse<FisentPackage[]>>('/packages/get-packages');
+    return res.data.response;
+  },
+  getByPatient: async (idPaciente: number) => {
+    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-by-patient/${idPaciente}`);
     return res.data.response;
   },
   getById: async (id: number) => {
-    const res = await api.get<BackendResponse<FisentPackage>>(`/packages/${id}`);
+    const res = await api.get<BackendResponse<FisentPackage>>(`/packages/get/${id}`);
     return res.data.response;
   },
   create: async (data: PackageCreateDTO) => {
-    const res = await api.post<BackendResponse<FisentPackage>>('/packages', data);
+    const res = await api.post<BackendResponse<FisentPackage>>('/packages/create', data);
     return res.data.response;
   },
   close: async (id: number) => {
-    const res = await api.patch<BackendResponse<FisentPackage>>(`/packages/${id}/close`);
+    const res = await api.put<BackendResponse<FisentPackage>>(`/packages/close/${id}`);
     return res.data.response;
   },
 };
@@ -90,29 +93,28 @@ export const professionalService = {
     const res = await api.get<BackendResponse<Professional[]>>('/professionals/get-all');
     return res.data.response;
   },
-  getById: async (id: number) => {
-    const res = await api.get<BackendResponse<Professional>>(`/professionals/${id}`);
-    return res.data.response;
-  },
 };
 
 // --- Appointment Service ---
 export const appointmentService = {
   getAll: async (fecha?: string, idProfesional?: number, idPaciente?: number) => {
-    // const params = new URLSearchParams();
-    // if (fecha) params.set('fecha', fecha);
-    // if (idProfesional) params.set('id_profesional', String(idProfesional));
-    // if (idPaciente) params.set('id_paciente', String(idPaciente));
-    // const res = await api.get<BackendResponse<Appointment[]>>(`/quotes?${params}`);
-    const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/all`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<Appointment[]>>('/quotes/all');
+    const appointments = res.data.response;
+
+    return appointments.filter((appointment) => {
+      const appointmentDate = appointment.fecha?.split('T')[0] ?? (appointment as any).fecha_agendamiento?.split('T')[0];
+      const byDate = !fecha || appointmentDate === fecha;
+      const byProfessional = !idProfesional || appointment.id_profesional === idProfesional;
+      const byPatient = !idPaciente || appointment.id_paciente === idPaciente;
+      return byDate && byProfessional && byPatient;
+    });
   },
-  getById: async (id: number) => {
-    const res = await api.get<BackendResponse<Appointment>>(`/quotes/${id}`);
+  getByPackage: async (idPackage: number) => {
+    const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/get-by-package/${idPackage}`);
     return res.data.response;
   },
   create: async (data: AppointmentCreateDTO) => {
-    const res = await api.post<BackendResponse<Appointment>>('/quotes', data);
+    const res = await api.post<BackendResponse<Appointment>>('/quotes/create', data);
     return res.data.response;
   },
   update: async (data: AppointmentUpdateDTO) => {
@@ -121,46 +123,60 @@ export const appointmentService = {
     return res.data.response;
   },
   cancel: async (id: number) => {
-    const res = await api.patch<BackendResponse<Appointment>>(`/quotes/${id}/cancel`);
+    const res = await api.delete<BackendResponse<Appointment>>(`/quotes/${id}`);
+    return res.data.response;
+  },
+  checkAvailability: async (idProfesional: number, date: string) => {
+    const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/availability/${idProfesional}?date=${encodeURIComponent(date)}`);
     return res.data.response;
   },
   checkCollision: async (fecha: string, idProfesional: number, horarioInicio: string, horarioFin: string) => {
-    const params = new URLSearchParams({ fecha, id_profesional: String(idProfesional), horario_inicio: horarioInicio, horario_fin: horarioFin });
-    const res = await api.get<BackendResponse<{ collision: boolean; appointments: Appointment[] }>>(`/quotes/collision?${params}`);
-    return res.data.response;
+    const appointments = await appointmentService.checkAvailability(idProfesional, fecha);
+    return {
+      collision: appointments.some((appointment) => appointment.horario_inicio < horarioFin && appointment.horario_fin > horarioInicio),
+      appointments,
+    };
   },
 };
 
 // --- Clinical History Service ---
 export const historyService = {
   getByAppointment: async (idCita: number) => {
-    const res = await api.get<BackendResponse<ClinicalHistory>>(`/history/quote/${idCita}`);
+    const res = await api.get<BackendResponse<ClinicalHistory[]>>(`/history/get-by-quote/${idCita}`);
     return res.data.response;
   },
   getByPatient: async (idPaciente: number) => {
-    const res = await api.get<BackendResponse<ClinicalHistory[]>>(`/history/patient/${idPaciente}`);
-    return res.data.response;
+    const appointments = await appointmentService.getAll(undefined, undefined, idPaciente);
+    const histories = await Promise.all(
+      appointments.map((appointment) => historyService.getByAppointment(appointment.id).catch(() => []))
+    );
+    return histories.flat();
   },
   create: async (data: ClinicalHistoryCreateDTO) => {
-    const res = await api.post<BackendResponse<ClinicalHistory>>('/history', data);
+    const res = await api.post<BackendResponse<ClinicalHistory>>('/history/create', data);
     return res.data.response;
   },
   update: async (id: number, data: Partial<ClinicalHistoryCreateDTO>) => {
-    const res = await api.put<BackendResponse<ClinicalHistory>>(`/history/${id}`, data);
+    const res = await api.put<BackendResponse<ClinicalHistory>>(`/history/update/${id}`, data);
     return res.data.response;
+  },
+  exportDocument: async (id: number) => {
+    const res = await api.get<Blob>(`/history/export-pdf/${id}`, { responseType: 'blob' });
+    return res.data;
   },
 };
 
 // --- CIE10 Service ---
 export const cie10Service = {
   getAll: async (search?: string) => {
-    // const params = search ? `?search=${encodeURIComponent(search)}` : '';
-    // const res = await api.get<BackendResponse<Cie10[]>>(`/cie10${params}`);
-    const res = await api.get<BackendResponse<Cie10[]>>(`/cie10/all`);
+    const params = new URLSearchParams();
+    if (search?.trim()) params.set('q', search.trim());
+    const query = params.toString();
+    const res = await api.get<BackendResponse<Cie10[]>>(`/cie10/all${query ? `?${query}` : ''}`);
     return res.data.response;
   },
   create: async (data: Cie10CreateDTO) => {
-    const res = await api.post<BackendResponse<Cie10>>('/cie10', data);
+    const res = await api.post<BackendResponse<Cie10>>('/cie10/create', data);
     return res.data.response;
   },
   update: async (id: number, data: Partial<Cie10CreateDTO>) => {
@@ -172,21 +188,34 @@ export const cie10Service = {
 // --- Payment Service ---
 export const paymentService = {
   getAll: async (idPaquete?: number, idCita?: number) => {
-    const params = new URLSearchParams();
-    if (idPaquete) params.set('id_paquete', String(idPaquete));
-    if (idCita) params.set('id_cita', String(idCita));
-    const res = await api.get<BackendResponse<Payment[]>>(`/payments?${params}`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<Payment[]>>('/payments/');
+    return res.data.response.filter((payment) => {
+      const byPackage = !idPaquete || payment.id_paquete === idPaquete;
+      const byAppointment = !idCita || payment.id_cita === idCita;
+      return byPackage && byAppointment;
+    });
   },
   create: async (data: PaymentCreateDTO) => {
-    const res = await api.post<BackendResponse<Payment>>('/payments', data);
+    const res = await api.post<BackendResponse<Payment>>('/payments/', data);
     return res.data.response;
   },
   getSummary: async (idPaquete?: number, idCita?: number) => {
-    const params = new URLSearchParams();
-    if (idPaquete) params.set('id_paquete', String(idPaquete));
-    if (idCita) params.set('id_cita', String(idCita));
-    const res = await api.get<BackendResponse<PaymentSummary>>(`/payments/summary?${params}`);
+    if (idPaquete) {
+      const res = await api.get<BackendResponse<PaymentSummary>>(`/payments/package-summary/${idPaquete}`);
+      return res.data.response;
+    }
+
+    const payments = await paymentService.getAll(undefined, idCita);
+    const abonado = payments.reduce((sum, payment) => sum + Number(payment.valor || 0), 0);
+    return {
+      total: abonado,
+      abonado,
+      saldo: 0,
+      estado: abonado > 0 ? 'PAGADO' : 'PENDIENTE',
+    } satisfies PaymentSummary;
+  },
+  getPackageAllSummary: async (idPaquete: number) => {
+    const res = await api.get<BackendResponse<PaymentSummary & { pagos: Payment[] }>>(`/payments/package-all-summary/${idPaquete}`);
     return res.data.response;
   },
 };
