@@ -138,11 +138,12 @@ export const professionalService = {
 export const appointmentService = {
   getPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<Appointment>> => {
     const query = buildQueryParams(params);
-    const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/all?${query}`, { signal });
+    const res = await api.get<BackendResponse<any[]>>(`/quotes/all?${query}`, { signal });
+    const appointments = (res.data.response ?? []).map(normalizeAppointment);
 
     return {
-      data: res.data.response,
-      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+      data: appointments,
+      pagination: res.data.pagination ?? fallbackPagination(appointments, params.page, params.limit),
     };
   },
   getAll: async (fecha?: string, idProfesional?: number, idPaciente?: number, page = 1, limit = 20) => {
@@ -154,25 +155,25 @@ export const appointmentService = {
     return result.data;
   },
   getByPackage: async (idPackage: number) => {
-    const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/get-by-package/${idPackage}`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<any[]>>(`/quotes/get-by-package/${idPackage}`);
+    return (res.data.response ?? []).map(normalizeAppointment);
   },
   create: async (data: AppointmentCreateDTO) => {
-    const res = await api.post<BackendResponse<Appointment>>('/quotes/create', normalizeAppointmentPayload(data));
-    return res.data.response;
+    const res = await api.post<BackendResponse<any>>('/quotes/create', normalizeAppointmentPayload(data));
+    return normalizeAppointment(res.data.response);
   },
   update: async (data: AppointmentUpdateDTO) => {
     const { id, ...rest } = data;
-    const res = await api.put<BackendResponse<Appointment>>(`/quotes/${id}`, normalizeAppointmentPayload(rest));
-    return res.data.response;
+    const res = await api.put<BackendResponse<any>>(`/quotes/${id}`, normalizeAppointmentPayload(rest));
+    return normalizeAppointment(res.data.response);
   },
   cancel: async (id: number) => {
     const res = await api.delete<BackendResponse<Appointment>>(`/quotes/${id}`);
     return res.data.response;
   },
   checkAvailability: async (idProfesional: number, date: string) => {
-    const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/availability/${idProfesional}?date=${encodeURIComponent(date)}`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<any[]>>(`/quotes/availability/${idProfesional}?date=${encodeURIComponent(date)}`);
+    return (res.data.response ?? []).map(normalizeAppointment);
   },
   checkCollision: async (fecha: string, idProfesional: number, horarioInicio: string, horarioFin: string) => {
     const appointments = await appointmentService.checkAvailability(idProfesional, fecha);
@@ -303,6 +304,39 @@ export const paymentService = {
 };
 
 
+
+
+function normalizeAppointment(data: any): Appointment {
+  const pacienteNombre = typeof data?.paciente === 'string'
+    ? data.paciente
+    : [data?.paciente?.nombre, data?.paciente?.apellido].filter(Boolean).join(' ');
+  const profesionalNombre = typeof data?.profesional === 'string'
+    ? [data.profesional, data?.apellido_profesional].filter(Boolean).join(' ')
+    : [data?.profesional?.nombre, data?.profesional?.apellido].filter(Boolean).join(' ');
+  const idPaquete = data?.id_paquete ?? data?.id_paquetes ?? null;
+  const horarioInicio = data?.horario_inicio ?? data?.hora_inicio ?? '';
+  const horarioFin = data?.horario_fin ?? data?.hora_fin ?? '';
+  const observaciones = data?.observaciones ?? data?.motivo ?? '';
+
+  return {
+    ...data,
+    id_paquete: idPaquete,
+    id_paquetes: data?.id_paquetes ?? idPaquete,
+    fecha: data?.fecha ?? data?.fecha_agendamiento ?? '',
+    horario_inicio: horarioInicio,
+    horario_fin: horarioFin,
+    hora_inicio: data?.hora_inicio ?? horarioInicio,
+    hora_fin: data?.hora_fin ?? horarioFin,
+    motivo: data?.motivo ?? observaciones,
+    observaciones,
+    estado: String(data?.estado ?? 'PROGRAMADA').toUpperCase(),
+    pagado: Boolean(data?.pagado),
+    paciente_nombre: data?.paciente_nombre ?? pacienteNombre,
+    profesional_nombre: data?.profesional_nombre ?? profesionalNombre,
+    created_at: data?.created_at ?? '',
+    updated_at: data?.updated_at ?? '',
+  } as Appointment;
+}
 
 function normalizePatientPayload(data: Partial<PatientCreateDTO>) {
   const payload: Record<string, unknown> = { ...data };
