@@ -1078,3 +1078,64 @@ Para mejor performance de RAG/LLM:
 - Añadir snapshots reales de respuestas por entorno (dev/staging) como anexos.
 - Versionar este documento junto al código para mantener trazabilidad.
 
+
+## 10) Validación frontend contra endpoints expuestos (2026-05-11)
+
+Esta revisión alinea el frontend con los endpoints documentados para dashboard, reportes, listados paginados y consultas auxiliares. El principio aplicado fue mantener compatibilidad con `response` como arreglo/objeto de negocio y consumir `pagination` como metadata hermana cuando el backend la entregue.
+
+### 10.1 Endpoints nuevos o ahora consumidos por el frontend
+
+| Módulo | Endpoint | Método | Uso en frontend | Estado de integración |
+| --- | --- | --- | --- | --- |
+| Reportes | `/reports/dashboard` | GET | Fuente principal de `ReportsPage` y cards del dashboard, evita cálculos masivos en cliente. | Integrado |
+| Reportes | `/reports/revenue` | GET | Servicio disponible para gráfica mensual independiente. | Integrado en servicio |
+| Reportes | `/reports/appointments/status-distribution` | GET | Servicio disponible para distribución de citas por estado. | Integrado en servicio |
+| Reportes | `/reports/professionals/top` | GET | Servicio disponible para ranking de profesionales. | Integrado en servicio |
+| Reportes | `/reports/packages/by-type` | GET | Servicio disponible para distribución de paquetes. | Integrado en servicio |
+| Reportes | `/reports/packages/near-completion` | GET | Servicio disponible para alertas de paquetes próximos a finalizar. | Integrado en servicio |
+| Reportes | `/reports/payments/recent` | GET | Servicio disponible para feed de pagos recientes. | Integrado en servicio |
+| Reportes | `/reports/sessions/summary` | GET | Servicio disponible para resumen global de sesiones. | Integrado en servicio |
+| Paquetes | `/packages/get-assigned` | GET | Listado operativo de paquetes asignados a pacientes. Reemplaza el uso incorrecto del catálogo `/packages/get-packages` en pantallas de gestión. | Integrado |
+| Paquetes | `/packages/get-available-by-patient/:id?quoteId=...` | GET | Selector de paquetes activos/disponibles por paciente al crear o editar citas. | Integrado en servicio |
+| Historia | `/history/get-by-patient/:id` | GET | Consulta directa de evoluciones por paciente cuando el backend la exponga. | Integrado con fallback |
+| Pagos | `/payments/appointment-summary/:id` | GET | Resumen de pagos por cita sin calcularlo con listados completos. | Integrado |
+| CIE10 | `/cie10/:id` | GET | Consulta directa de diagnóstico por ID. | Integrado en servicio |
+| CIE10 | `/cie10/code/:code` | GET | Consulta directa por código CIE10 normalizado. | Integrado en servicio |
+
+### 10.2 Ajustes y optimizaciones aplicadas
+
+| Área | Antes | Ajuste aplicado | Beneficio |
+| --- | --- | --- | --- |
+| Dashboard | Calculaba pacientes/paquetes/citas desde listados CRUD. | Consume `/reports/dashboard` para métricas consolidadas y solo pide listados mínimos para widgets operativos. | Menos transferencia y menos lógica agregada en cliente. |
+| Reportes | Descargaba pacientes, paquetes, citas, pagos y profesionales, luego hacía `filter`, `reduce`, `map` y agrupaciones en React. | `ReportsPage` usa `/reports/dashboard` como fuente única de métricas y datasets ya agregados. | Evita cálculos pesados y mejora consistencia con backend. |
+| Paquetes asignados | `packageService.getAll()` llamaba `/packages/get-packages`, que es catálogo. | `getAll()` ahora apunta a `/packages/get-assigned`; el catálogo queda como `getCatalog()`/`getCatalogPaginated()`. | Corrige la diferencia entre tipos de paquete y paquetes realmente asignados a pacientes. |
+| Citas | `appointmentService.getAll()` descargaba todo y filtraba por fecha/profesional/paciente en cliente. | Envía `fecha`, `id_profesional`, `id_paciente`, `page` y `limit` a `/quotes/all`. | Usa filtros backend y soporta paginación. |
+| Pagos | `paymentService.getAll()` descargaba todo y filtraba por paquete/cita en cliente. | Envía `id_paquete`, `id_cita`, `page`, `limit` y búsqueda a `/payments/`. | Reduce descarga innecesaria y habilita listados grandes. |
+| Profesionales | Solo existía listado completo. | Se agregó `getPaginated()` con `page`, `limit`, `search` y metadata. | Listos para catálogos grandes. |
+| CIE10 | Solo usaba `q` sin contrato de paginación. | Se agregó `getPaginated()` con `q`, `page`, `limit`, `pagination`, `getById()` y `getByCode()`. | Búsquedas escalables y consultas directas. |
+| Historia por paciente | Se resolvía en cliente consultando citas y luego historias por cita. | Se intenta `/history/get-by-patient/:id`; si no existe, conserva fallback anterior. | Compatible con backend nuevo y con entornos donde aún no esté desplegado. |
+| Pagos por cita | El resumen se calculaba sumando pagos en cliente. | Usa `/payments/appointment-summary/:id`. | Mantiene reglas financieras en backend. |
+| Adaptadores de payload | Algunos formularios legacy usan nombres de campo de frontend (`nombres`, `fecha`, `id_paquete`, `observaciones`, tipos en mayúscula). | Los servicios normalizan hacia el contrato backend (`nombre`, `fecha_agendamiento`, `id_paquetes`, `observacion`, tipos en minúscula). | Reduce fallos por diferencias históricas de contrato sin cambiar la UI completa. |
+
+### 10.3 Paginaciones incluidas
+
+| Endpoint | Parámetros soportados por el frontend | Metadata esperada | Compatibilidad |
+| --- | --- | --- | --- |
+| `/patient/get-patients` | `page`, `limit`, `search` | `pagination` | Mantiene `response: Patient[]`. |
+| `/packages/get-packages` | `page`, `limit`, `search` | `pagination` | Mantiene `response` como catálogo de paquetes. |
+| `/packages/get-assigned` | `page`, `limit`, `search`, `id_paciente`, `id_profesional`, `id_estado_citas` | `pagination` | Mantiene `response` como paquetes asignados. |
+| `/quotes/all` | `page`, `limit`, `fecha`, `id_profesional`, `id_paciente`, `search` | `pagination` | Mantiene `response: Appointment[]`. |
+| `/payments/` | `page`, `limit`, `search`, `id_paquete`, `id_cita` | `pagination` | Mantiene `response: Payment[]`. |
+| `/professionals/get-all` | `page`, `limit`, `search` | `pagination` | Mantiene `response: Professional[]`. |
+| `/cie10/all` | `page`, `limit`, `q`, `codigo` | `pagination` | Mantiene `response: Cie10[]`. |
+
+### 10.4 Endpoints pendientes o ajustes a considerar
+
+| Prioridad | Endpoint / área | Observación | Recomendación |
+| --- | --- | --- | --- |
+| Alta | `/history/get-by-patient/:id` | El frontend ya lo intenta, pero el documento principal aún no lo tenía en el mapa rápido original. | Documentarlo oficialmente y mantener respuesta `ClinicalHistory[]` con relaciones de cita y CIE10. |
+| Alta | DTO de paquetes | La documentación backend usa `id_pacientes`, `id_paquetes_atenciones`, `id_profesional`, mientras algunos formularios legacy del frontend aún modelan `id_paciente`, `tipo_paquete`, `nombre`. | Unificar contrato de creación/edición de paquetes o agregar adaptador explícito antes del envío. |
+| Media | Catálogo de paquetes vs paquetes asignados | Ya se separó en servicio, pero las pantallas que creen paquetes deberían alimentarse del catálogo real `/packages/get-packages`. | Ajustar formularios para seleccionar `id_paquetes_atenciones` desde catálogo. |
+| Media | Estados de citas | El frontend usa nombres (`PROGRAMADA`, `COMPLETADA`) y el backend documenta `id_estado_citas`. | Confirmar si el backend entrega ambos o agregar normalización de estado en un mapper. |
+| Media | Reportes con fechas exactas | Los servicios soportan `period`, `startDate` y `endDate`, pero la UI actual solo expone selector de período. | Agregar filtros de rango de fechas si el usuario necesita reportes contables/auditoría. |
+| Baja | Paginación visible en pantallas no migradas | Servicios ya soportan paginación, pero algunas páginas siguen usando listados cortos por compatibilidad visual. | Migrar gradualmente a `usePaginatedResource` y controles de paginación reutilizables. |
