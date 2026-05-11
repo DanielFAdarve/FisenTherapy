@@ -9,7 +9,7 @@ import { AppLayout, ProtectedRoute, PublicRoute } from './components/layout/Layo
 // Pages
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import PatientsPage from './pages/PatientsPage';
+import PatientsPage from './pages/patients/PatientsPage';
 import PackagesPage from './pages/PackagesPage';
 import AppointmentsPage from './pages/AppointmentsPage';
 import CalendarPage from './pages/CalendarPage';
