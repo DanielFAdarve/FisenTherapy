@@ -16,6 +16,7 @@ Este backend cubre:
 - Registro de pagos (por paquete o por cita).
 - Login con JWT.
 - Gestión de profesionales (consulta).
+- Reportes y estadísticas agregadas para dashboard (requerimiento documentado; evita cálculos pesados en frontend).
 
 ## 2) Base URL y seguridad
 
@@ -29,6 +30,7 @@ Este backend cubre:
   - `/payments/*`
   - `/professionals/*`
   - `/cie10/*`
+  - `/reports/*`
 
 ### 2.1 Header de autenticación
 
@@ -304,6 +306,8 @@ Borrado lógico (`estado=false`).
 
 Devuelve catálogo de tipos de paquete (`atencion_paquetes`), no los paquetes asignados.
 
+> Implementado: soporta `page`, `limit`, `search` y metadata `pagination` manteniendo `response` como `AttentionPackage[]`.
+
 ### POST `/packages/create`
 
 Crea paquete para paciente.
@@ -327,7 +331,7 @@ Reglas:
 
 ### GET `/packages/get-by-patient/:id`
 
-Lista paquetes de un paciente, incluyendo:
+Lista paquetes asignados a un paciente, incluyendo:
 
 - `attentionPackage`
 - `statusPackage`
@@ -339,6 +343,21 @@ Lista paquetes de un paciente, incluyendo:
 
 Detalle de paquete con relaciones amplias (paciente, tipo, estado, profesional, CIE10 secundario, citas).
 
+### GET `/packages/get-available-by-patient/:id?quoteId=...`
+
+Lista paquetes activos del paciente con sesiones disponibles. Está orientado al selector de paquetes al crear/editar citas.
+
+Parámetros:
+
+- `:id`: ID del paciente.
+- `quoteId` opcional: ID de la cita actual en modo edición para no descontarla dos veces.
+
+Respuesta: `response` es un arreglo con `id_paquete`, sesiones disponibles/usadas/totales, tipo de paquete, profesional, motivo secundario y `tiene_cita_actual`.
+
+### GET `/packages/get-assigned?page=1&limit=20&search=...`
+
+Lista paquetes asignados a pacientes con paginación, búsqueda y filtros opcionales `id_paciente`, `id_profesional`, `id_estado_citas`. No confundir con `GET /packages/get-packages`, que devuelve catálogo de tipos.
+
 ### PUT `/packages/close/:id`
 
 Cierra paquete (`id_estado_citas = 3`).
@@ -347,7 +366,20 @@ Cierra paquete (`id_estado_citas = 3`).
 
 ### GET `/quotes/all`
 
-Lista todas las citas.
+Lista citas.
+
+> Implementado: soporta paginación y filtros sin romper compatibilidad:
+>
+> - `page` y `limit` para paginar.
+> - `search` para búsquedas textuales útiles para UI.
+> - `fecha` o rango `fechaInicio`/`fechaFin` para agenda.
+> - `id_profesional` para filtrar por profesional.
+> - `id_paciente` para filtrar por paciente vía paquete.
+> - Mantener `response` como `Appointment[]` y publicar metadata en `pagination`.
+>
+> Ejemplo: `GET /quotes/all?page=1&limit=20&fecha=2026-05-10&id_profesional=3`.
+>
+> Implementado: además de `PUT /quotes/update/:id`, existe alias compatible `PUT /quotes/:id`.
 
 ### GET `/quotes/all-attention-packages`
 
@@ -390,6 +422,12 @@ Parámetro:
 
 - `:id` = `id_profesional`
 - query `date` obligatoria
+
+### PUT `/quotes/update/:id`
+
+Actualiza una cita existente.
+
+> Compatibilidad frontend: también está disponible el alias `PUT /quotes/:id`.
 
 ### DELETE `/quotes/:id`
 
@@ -441,7 +479,11 @@ Exporta **DOCX** (aunque la ruta diga pdf) con `Content-Disposition: attachment;
 
 ### GET `/payments/`
 
-Lista todos los pagos.
+Lista pagos.
+
+> Implementado: soporta `page`, `limit`, `search`, `id_paquete`, `id_cita` y metadata `pagination` sin cambiar `response` (`Payment[]`). Evita que el frontend descargue todos los pagos para filtrar por paquete/cita.
+>
+> Ejemplo: `GET /payments/?page=1&limit=20&id_paquete=5&search=transferencia`.
 
 ### GET `/payments/:id`
 
@@ -475,6 +517,27 @@ Resumen de pagos de un paquete:
 ### GET `/payments/package-all-summary/:id`
 
 Igual al resumen anterior, pero agrega `pagos: []`.
+
+### GET `/payments/appointment-summary/:id`
+
+Resumen de pagos de una cita. La pantalla de pagos puede obtener estado de cuenta por cita sin calcularlo en cliente.
+
+Respuesta recomendada:
+
+```json
+{
+  "status": 200,
+  "message": "Resumen de pagos de la cita",
+  "response": {
+    "id_cita": 44,
+    "total_cita": 60000,
+    "total_abonado": 60000,
+    "saldo_pendiente": 0,
+    "estado_pago": "pagado",
+    "cantidad_abonos": 1
+  }
+}
+```
 
 ### POST `/payments/`
 
@@ -551,6 +614,8 @@ Elimina pago físicamente.
 
 Lista todos los profesionales.
 
+> Implementado: soporta `page`, `limit`, `search` y `pagination` manteniendo `response` como arreglo. Para rankings de reportes no usar este endpoint; usar `GET /reports/professionals/top`.
+
 ## 5.8 CIE10 (`/cie10`)
 
 ### POST `/cie10/create`
@@ -579,15 +644,362 @@ Consulta CIE10 con filtros:
 - `codigo` exacto (normalizado)
 - `q` búsqueda parcial en código o descripción
 
+> Implementado: soporta `page`, `limit` y `pagination` manteniendo `response` como `Cie10[]`.
+>
+> Ejemplo: `GET /cie10/all?q=lumbalgia&page=1&limit=20`.
+
 ### GET `/cie10/:id`
 
 Obtiene por ID.
+
+### PUT `/cie10/:id`
+
+Actualiza un código CIE10 existente. Normaliza `codigo`, valida duplicados y responde con contrato estándar.
+
+Body recomendado:
+
+```json
+{
+  "codigo": "M54.5",
+  "descripcion": "Lumbalgia"
+}
+```
 
 ### GET `/cie10/code/:code`
 
 Obtiene por código.
 
-## 6) Reglas transversales y consideraciones para un LLM
+## 6) Reportes y estadísticas (`/reports`) — requerimiento backend
+
+### Objetivo del módulo
+
+Mover la agregación de métricas desde el frontend hacia el backend. La página de reportes no debe ejecutar `getAll()` de pacientes, paquetes, citas, pagos y profesionales para luego hacer `reduce`, `filter`, `map` o `groupBy` en cliente.
+
+El backend debe retornar resúmenes y datasets ya agrupados, usando agregaciones SQL, filtros por fecha, joins optimizados y solo los campos necesarios.
+
+### Parámetros globales para endpoints de reportes
+
+Todos los endpoints de reportes deben soportar:
+
+- `period=week|month|quarter`
+- `startDate=YYYY-MM-DD` opcional
+- `endDate=YYYY-MM-DD` opcional
+
+Regla recomendada:
+
+- Si llegan `startDate` y `endDate`, tienen prioridad sobre `period`.
+- Si no llegan fechas, `period` calcula el rango relativo en backend.
+- Si no llega `period`, usar `month` como valor por defecto.
+
+### GET `/reports/dashboard` (prioridad alta)
+
+Retorna todas las métricas principales para cards, gráficas y resumen general del dashboard.
+
+Query params:
+
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta esperada:
+
+```json
+{
+  "status": 200,
+  "message": "Dashboard report",
+  "response": {
+    "patients": {
+      "active": 120,
+      "inactive": 15,
+      "total": 135
+    },
+    "appointments": {
+      "completed": 230,
+      "scheduled": 40,
+      "cancelled": 20,
+      "noShow": 10,
+      "attendanceRate": 88
+    },
+    "sessions": {
+      "completed": 480,
+      "pending": 120,
+      "total": 600,
+      "completionRate": 80
+    },
+    "revenue": {
+      "total": 25000000,
+      "byMonth": [
+        {
+          "month": "2026-01",
+          "amount": 5000000
+        }
+      ],
+      "byPaymentMethod": [
+        {
+          "method": "EFECTIVO",
+          "amount": 12000000
+        },
+        {
+          "method": "TRANSFERENCIA",
+          "amount": 8000000
+        }
+      ]
+    },
+    "packages": {
+      "total": 80,
+      "byType": [
+        {
+          "type": "REHABILITACION",
+          "count": 40
+        }
+      ],
+      "nearCompletion": [
+        {
+          "id": 1,
+          "nombre": "Paquete Rodilla",
+          "completionPercentage": 85,
+          "sesionesRealizadas": 17,
+          "cantidadSesiones": 20,
+          "paciente": {
+            "id": 5,
+            "nombres": "Ana",
+            "apellidos": "Perez"
+          }
+        }
+      ]
+    },
+    "professionals": {
+      "top": [
+        {
+          "id": 2,
+          "nombres": "Carlos",
+          "apellidos": "Lopez",
+          "appointments": 42
+        }
+      ]
+    },
+    "recentPayments": [
+      {
+        "id": 1,
+        "tipo": "ABONO",
+        "valor": 200000,
+        "metodo_pago": "EFECTIVO",
+        "fecha_pago": "2026-05-10T10:00:00"
+      }
+    ]
+  }
+}
+```
+
+### GET `/reports/revenue` (prioridad alta)
+
+Ingresos agrupados por mes para la gráfica de evolución mensual.
+
+Query params:
+
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta:
+
+```json
+{
+  "status": 200,
+  "message": "Revenue report",
+  "response": [
+    {
+      "month": "2026-01",
+      "amount": 5000000
+    }
+  ]
+}
+```
+
+### GET `/reports/appointments/status-distribution` (prioridad alta)
+
+Distribución de citas por estado para barras/progreso.
+
+Query params:
+
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta:
+
+```json
+{
+  "status": 200,
+  "message": "Appointment status distribution",
+  "response": {
+    "completed": 120,
+    "scheduled": 50,
+    "cancelled": 10,
+    "noShow": 5
+  }
+}
+```
+
+### GET `/reports/professionals/top` (prioridad media)
+
+Ranking de profesionales por cantidad de citas.
+
+Query params:
+
+- `limit=5`
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta:
+
+```json
+{
+  "status": 200,
+  "message": "Top professionals",
+  "response": [
+    {
+      "id": 1,
+      "nombres": "Juan",
+      "apellidos": "Perez",
+      "appointments": 45
+    }
+  ]
+}
+```
+
+### GET `/reports/packages/by-type` (prioridad media)
+
+Distribución de paquetes por tipo.
+
+Query params:
+
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta:
+
+```json
+{
+  "status": 200,
+  "message": "Packages by type",
+  "response": [
+    {
+      "type": "REHABILITACION",
+      "count": 30
+    }
+  ]
+}
+```
+
+### GET `/reports/packages/near-completion` (prioridad media)
+
+Paquetes próximos a terminar para alertas del dashboard.
+
+Query params:
+
+- `threshold=70`
+- `limit=5`
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta:
+
+```json
+{
+  "status": 200,
+  "message": "Packages near completion",
+  "response": [
+    {
+      "id": 1,
+      "nombre": "Rodilla",
+      "completionPercentage": 85,
+      "sesionesRealizadas": 17,
+      "cantidadSesiones": 20,
+      "paciente": {
+        "id": 5,
+        "nombres": "Ana",
+        "apellidos": "Perez"
+      }
+    }
+  ]
+}
+```
+
+### GET `/reports/payments/recent` (prioridad media)
+
+Feed de pagos recientes.
+
+Query params:
+
+- `limit=5`
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta:
+
+```json
+{
+  "status": 200,
+  "message": "Recent payments",
+  "response": [
+    {
+      "id": 1,
+      "tipo": "ABONO",
+      "valor": 200000,
+      "metodo_pago": "TRANSFERENCIA",
+      "fecha_pago": "2026-05-10"
+    }
+  ]
+}
+```
+
+### GET `/reports/sessions/summary` (prioridad baja/media)
+
+Resumen de avance de sesiones para gráfico circular.
+
+Query params:
+
+- `period`
+- `startDate`
+- `endDate`
+
+Respuesta:
+
+```json
+{
+  "status": 200,
+  "message": "Sessions summary",
+  "response": {
+    "completed": 320,
+    "pending": 40,
+    "total": 360,
+    "completionRate": 89
+  }
+}
+```
+
+### No hacer en reportes
+
+- No retornar miles de pagos, citas o paquetes para que el frontend calcule métricas.
+- No obligar al frontend a hacer `reduce`, `map`, `groupBy` o filtros complejos.
+- No reutilizar endpoints CRUD/listado masivo como fuente principal del dashboard.
+
+### Prioridad de implementación recomendada
+
+1. `GET /reports/dashboard`
+2. `GET /reports/revenue`
+3. `GET /reports/appointments/status-distribution`
+4. `GET /reports/professionals/top`
+5. `GET /reports/packages/near-completion`
+6. `GET /reports/payments/recent`
+7. Endpoints analíticos avanzados y comparativas históricas.
+
+## 7) Reglas transversales y consideraciones para un LLM
 
 1. **Autorización**: salvo login y swagger, todo exige JWT Bearer.
 2. **Respuesta envolvente**: casi todos endpoints devuelven `status/message/response`.
@@ -608,7 +1020,7 @@ Obtiene por código.
 8. **Export de historia**:
    - endpoint nombrado `export-pdf` pero entrega DOCX.
 
-## 7) Mapa rápido de endpoints
+## 8) Mapa rápido de endpoints
 
 - `POST /auth/login`
 - `GET /patient/get-patients`
@@ -619,13 +1031,16 @@ Obtiene por código.
 - `DELETE /patient/delete-patient/:id`
 - `GET /packages/get-packages`
 - `POST /packages/create`
+- `GET /packages/get-assigned`
 - `GET /packages/get-by-patient/:id`
+- `GET /packages/get-available-by-patient/:id?quoteId=...`
 - `GET /packages/get/:id`
 - `PUT /packages/close/:id`
 - `GET /quotes/all`
 - `GET /quotes/all-attention-packages`
 - `POST /quotes/create`
 - `GET /quotes/get-by-package/:id`
+- `PUT /quotes/update/:id`
 - `GET /quotes/availability/:id?date=YYYY-MM-DD`
 - `DELETE /quotes/:id`
 - `POST /history/create`
@@ -636,16 +1051,26 @@ Obtiene por código.
 - `GET /payments/:id`
 - `GET /payments/package-summary/:id`
 - `GET /payments/package-all-summary/:id`
+- `GET /payments/appointment-summary/:id`
 - `POST /payments/`
 - `PUT /payments/:id`
 - `DELETE /payments/:id`
 - `GET /professionals/get-all`
+- `GET /reports/dashboard`
+- `GET /reports/revenue`
+- `GET /reports/appointments/status-distribution`
+- `GET /reports/professionals/top`
+- `GET /reports/packages/by-type`
+- `GET /reports/packages/near-completion`
+- `GET /reports/payments/recent`
+- `GET /reports/sessions/summary`
 - `POST /cie10/create`
 - `GET /cie10/all`
 - `GET /cie10/:id`
+- `PUT /cie10/:id`
 - `GET /cie10/code/:code`
 
-## 8) Sugerencia para alimentar un LLM
+## 9) Sugerencia para alimentar un LLM
 
 Para mejor performance de RAG/LLM:
 
