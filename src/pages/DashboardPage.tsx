@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Users, Package, Calendar, CreditCard, Clock, ArrowRight, Activity } from 'lucide-react';
 import { Card, StatCard, Skeleton, CardHeader, Avatar, Badge, getStatusBadge } from '../components/ui/Components';
-import { patientService, packageService, appointmentService } from '../data-access/services';
+import { patientService, appointmentService, reportService } from '../data-access/services';
 import { format } from 'date-fns';
 
 export default function DashboardPage() {
@@ -16,16 +16,16 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [patients, packages, appointments] = await Promise.all([
-          patientService.getAll().catch(() => []),
-          packageService.getAll().catch(() => []),
-          appointmentService.getAll(format(new Date(), 'yyyy-MM-dd')).catch(() => []),
+        const [report, patients, appointments] = await Promise.all([
+          reportService.getDashboard({ period: 'month' }).catch(() => null),
+          patientService.getAll(undefined, 1, 5).catch(() => []),
+          appointmentService.getAll(format(new Date(), 'yyyy-MM-dd'), undefined, undefined, 1, 5).catch(() => []),
         ]);
         setStats({
-          patients: patients.filter((p: any) => p.estado).length,
-          activePackages: packages.filter((p: any) => p.estado === 'ACTIVO').length,
+          patients: report?.patients.active ?? patients.filter((p: any) => p.estado).length,
+          activePackages: report?.packages.total ?? 0,
           todayAppointments: appointments.length,
-          totalRevenue: 0,
+          totalRevenue: report?.revenue.total ?? 0,
         });
         setTodayAppointments(appointments.slice(0, 5));
         setRecentPatients(patients.slice(0, 5));
@@ -63,7 +63,7 @@ export default function DashboardPage() {
             <StatCard label="Pacientes Activos" value={stats.patients} icon={<Users className="w-5 h-5" />} color="teal" />
             <StatCard label="Paquetes Activos" value={stats.activePackages} icon={<Package className="w-5 h-5" />} color="blue" />
             <StatCard label="Citas Hoy" value={stats.todayAppointments} icon={<Calendar className="w-5 h-5" />} color="amber" />
-            <StatCard label="Ingresos Mes" value="$0" icon={<CreditCard className="w-5 h-5" />} color="emerald" />
+            <StatCard label="Ingresos Mes" value={`$${stats.totalRevenue.toLocaleString()}`} icon={<CreditCard className="w-5 h-5" />} color="emerald" />
           </>
         )}
       </div>

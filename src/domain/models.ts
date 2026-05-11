@@ -218,6 +218,97 @@ export interface PaymentSummary {
   estado: 'PAGADO' | 'PENDIENTE' | 'ABONADO';
 }
 
+
+// --- Reportes / Dashboard ---
+export type ReportPeriod = 'week' | 'month' | 'quarter';
+
+export interface ReportQueryParams {
+  period?: ReportPeriod;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  threshold?: number;
+}
+
+export interface RevenueByMonth {
+  month: string;
+  amount: number;
+}
+
+export interface PaymentMethodRevenue {
+  method: string;
+  amount: number;
+}
+
+export interface AppointmentStatusDistribution {
+  completed: number;
+  scheduled: number;
+  cancelled: number;
+  noShow: number;
+}
+
+export interface SessionsSummary {
+  completed: number;
+  pending: number;
+  total: number;
+  completionRate: number;
+}
+
+export interface TopProfessionalReport {
+  id: number;
+  nombres?: string;
+  apellidos?: string;
+  nombre?: string;
+  apellido?: string;
+  appointments: number;
+}
+
+export interface PackageTypeReport {
+  type: string;
+  count: number;
+}
+
+export interface NearCompletionPackageReport {
+  id: number;
+  nombre: string;
+  completionPercentage: number;
+  sesionesRealizadas: number;
+  cantidadSesiones: number;
+  paciente?: {
+    id: number;
+    nombres?: string;
+    apellidos?: string;
+    nombre?: string;
+    apellido?: string;
+  };
+}
+
+export interface RecentPaymentReport {
+  id: number;
+  tipo: string;
+  valor: number;
+  metodo_pago: string;
+  fecha_pago: string;
+}
+
+export interface DashboardReport {
+  patients: { active: number; inactive: number; total: number };
+  appointments: AppointmentStatusDistribution & { attendanceRate: number };
+  sessions: SessionsSummary;
+  revenue: {
+    total: number;
+    byMonth: RevenueByMonth[];
+    byPaymentMethod: PaymentMethodRevenue[];
+  };
+  packages: {
+    total: number;
+    byType: PackageTypeReport[];
+    nearCompletion: NearCompletionPackageReport[];
+  };
+  professionals: { top: TopProfessionalReport[] };
+  recentPayments: RecentPaymentReport[];
+}
+
 // --- UI Helpers ---
 export interface PaginationParams {
   page?: number;

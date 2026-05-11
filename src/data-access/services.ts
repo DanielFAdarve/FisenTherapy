@@ -13,7 +13,9 @@ import {
   ClinicalHistory, ClinicalHistoryCreateDTO,
   Cie10, Cie10CreateDTO,
   Payment, PaymentCreateDTO, PaymentSummary,
-  PaginationParams, PaginatedResult,
+  PaginationParams, PaginatedResult, ReportQueryParams, DashboardReport, RevenueByMonth,
+  AppointmentStatusDistribution, TopProfessionalReport, PackageTypeReport, NearCompletionPackageReport,
+  RecentPaymentReport, SessionsSummary,
 } from '../domain/models';
 
 // --- Auth Service ---
@@ -49,12 +51,12 @@ export const patientService = {
     return res.data.response;
   },
   create: async (data: PatientCreateDTO) => {
-    const res = await api.post<BackendResponse<Patient>>('/patient/create-patient', data);
+    const res = await api.post<BackendResponse<Patient>>('/patient/create-patient', normalizePatientPayload(data));
     return res.data.response;
   },
   update: async (data: PatientUpdateDTO) => {
     const { id, ...rest } = data;
-    const res = await api.put<BackendResponse<Patient>>(`/patient/update-patient/${id}`, rest);
+    const res = await api.put<BackendResponse<Patient>>(`/patient/update-patient/${id}`, normalizePatientPayload(rest));
     return res.data.response;
   },
   delete: async (id: number) => {
@@ -65,12 +67,40 @@ export const patientService = {
 
 // --- Package Service ---
 export const packageService = {
-  getAll: async () => {
-    const res = await api.get<BackendResponse<FisentPackage[]>>('/packages/get-packages');
-    return res.data.response;
+  getCatalogPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<FisentPackage>> => {
+    const query = buildQueryParams(params);
+    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-packages?${query}`, { signal });
+
+    return {
+      data: res.data.response,
+      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+    };
+  },
+  getCatalog: async (search?: string, page = 1, limit = 20) => {
+    const result = await packageService.getCatalogPaginated({ search, page, limit });
+    return result.data;
+  },
+  getAssignedPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<FisentPackage>> => {
+    const query = buildQueryParams(params);
+    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-assigned?${query}`, { signal });
+
+    return {
+      data: res.data.response,
+      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+    };
+  },
+  // Compatibilidad: las pantallas actuales trabajan con paquetes asignados, no con el catálogo.
+  getAll: async (search?: string, page = 1, limit = 20) => {
+    const result = await packageService.getAssignedPaginated({ search, page, limit });
+    return result.data;
   },
   getByPatient: async (idPaciente: number) => {
     const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-by-patient/${idPaciente}`);
+    return res.data.response;
+  },
+  getAvailableByPatient: async (idPaciente: number, quoteId?: number) => {
+    const query = quoteId ? `?quoteId=${encodeURIComponent(String(quoteId))}` : '';
+    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-available-by-patient/${idPaciente}${query}`);
     return res.data.response;
   },
   getById: async (id: number) => {
@@ -89,37 +119,51 @@ export const packageService = {
 
 // --- Professional Service ---
 export const professionalService = {
-  getAll: async () => {
-    const res = await api.get<BackendResponse<Professional[]>>('/professionals/get-all');
-    return res.data.response;
+  getPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<Professional>> => {
+    const query = buildQueryParams(params);
+    const res = await api.get<BackendResponse<Professional[]>>(`/professionals/get-all?${query}`, { signal });
+
+    return {
+      data: res.data.response,
+      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+    };
+  },
+  getAll: async (search?: string, page = 1, limit = 20) => {
+    const result = await professionalService.getPaginated({ search, page, limit });
+    return result.data;
   },
 };
 
 // --- Appointment Service ---
 export const appointmentService = {
-  getAll: async (fecha?: string, idProfesional?: number, idPaciente?: number) => {
-    const res = await api.get<BackendResponse<Appointment[]>>('/quotes/all');
-    const appointments = res.data.response;
+  getPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<Appointment>> => {
+    const query = buildQueryParams(params);
+    const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/all?${query}`, { signal });
 
-    return appointments.filter((appointment) => {
-      const appointmentDate = appointment.fecha?.split('T')[0] ?? (appointment as any).fecha_agendamiento?.split('T')[0];
-      const byDate = !fecha || appointmentDate === fecha;
-      const byProfessional = !idProfesional || appointment.id_profesional === idProfesional;
-      const byPatient = !idPaciente || appointment.id_paciente === idPaciente;
-      return byDate && byProfessional && byPatient;
-    });
+    return {
+      data: res.data.response,
+      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+    };
+  },
+  getAll: async (fecha?: string, idProfesional?: number, idPaciente?: number, page = 1, limit = 20) => {
+    const filters: PaginationParams['filters'] = {};
+    if (fecha) filters.fecha = fecha;
+    if (idProfesional) filters.id_profesional = idProfesional;
+    if (idPaciente) filters.id_paciente = idPaciente;
+    const result = await appointmentService.getPaginated({ page, limit, filters });
+    return result.data;
   },
   getByPackage: async (idPackage: number) => {
     const res = await api.get<BackendResponse<Appointment[]>>(`/quotes/get-by-package/${idPackage}`);
     return res.data.response;
   },
   create: async (data: AppointmentCreateDTO) => {
-    const res = await api.post<BackendResponse<Appointment>>('/quotes/create', data);
+    const res = await api.post<BackendResponse<Appointment>>('/quotes/create', normalizeAppointmentPayload(data));
     return res.data.response;
   },
   update: async (data: AppointmentUpdateDTO) => {
     const { id, ...rest } = data;
-    const res = await api.put<BackendResponse<Appointment>>(`/quotes/${id}`, rest);
+    const res = await api.put<BackendResponse<Appointment>>(`/quotes/${id}`, normalizeAppointmentPayload(rest));
     return res.data.response;
   },
   cancel: async (id: number) => {
@@ -146,11 +190,16 @@ export const historyService = {
     return res.data.response;
   },
   getByPatient: async (idPaciente: number) => {
-    const appointments = await appointmentService.getAll(undefined, undefined, idPaciente);
-    const histories = await Promise.all(
-      appointments.map((appointment) => historyService.getByAppointment(appointment.id).catch(() => []))
-    );
-    return histories.flat();
+    try {
+      const res = await api.get<BackendResponse<ClinicalHistory[]>>(`/history/get-by-patient/${idPaciente}`);
+      return res.data.response;
+    } catch {
+      const appointments = await appointmentService.getAll(undefined, undefined, idPaciente);
+      const histories = await Promise.all(
+        appointments.map((appointment) => historyService.getByAppointment(appointment.id).catch(() => []))
+      );
+      return histories.flat();
+    }
   },
   create: async (data: ClinicalHistoryCreateDTO) => {
     const res = await api.post<BackendResponse<ClinicalHistory>>('/history/create', data);
@@ -168,11 +217,26 @@ export const historyService = {
 
 // --- CIE10 Service ---
 export const cie10Service = {
-  getAll: async (search?: string) => {
-    const params = new URLSearchParams();
-    if (search?.trim()) params.set('q', search.trim());
-    const query = params.toString();
-    const res = await api.get<BackendResponse<Cie10[]>>(`/cie10/all${query ? `?${query}` : ''}`);
+  getPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<Cie10>> => {
+    const { search, ...rest } = params;
+    const query = buildQueryParams({ ...rest, filters: { ...(rest.filters ?? {}), ...(search?.trim() ? { q: search.trim() } : {}) } });
+    const res = await api.get<BackendResponse<Cie10[]>>(`/cie10/all?${query}`, { signal });
+
+    return {
+      data: res.data.response,
+      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+    };
+  },
+  getAll: async (search?: string, page = 1, limit = 20) => {
+    const result = await cie10Service.getPaginated({ search, page, limit });
+    return result.data;
+  },
+  getById: async (id: number) => {
+    const res = await api.get<BackendResponse<Cie10>>(`/cie10/${id}`);
+    return res.data.response;
+  },
+  getByCode: async (code: string) => {
+    const res = await api.get<BackendResponse<Cie10>>(`/cie10/code/${encodeURIComponent(code)}`);
     return res.data.response;
   },
   create: async (data: Cie10CreateDTO) => {
@@ -187,35 +251,147 @@ export const cie10Service = {
 
 // --- Payment Service ---
 export const paymentService = {
-  getAll: async (idPaquete?: number, idCita?: number) => {
-    const res = await api.get<BackendResponse<Payment[]>>('/payments/');
-    return res.data.response.filter((payment) => {
-      const byPackage = !idPaquete || payment.id_paquete === idPaquete;
-      const byAppointment = !idCita || payment.id_cita === idCita;
-      return byPackage && byAppointment;
-    });
+  getPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<Payment>> => {
+    const query = buildQueryParams(params);
+    const res = await api.get<BackendResponse<Payment[]>>(`/payments/?${query}`, { signal });
+
+    return {
+      data: res.data.response,
+      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+    };
+  },
+  getAll: async (idPaquete?: number, idCita?: number, page = 1, limit = 20) => {
+    const filters: PaginationParams['filters'] = {};
+    if (idPaquete) filters.id_paquete = idPaquete;
+    if (idCita) filters.id_cita = idCita;
+    const result = await paymentService.getPaginated({ page, limit, filters });
+    return result.data;
+  },
+  getById: async (id: number) => {
+    const res = await api.get<BackendResponse<Payment>>(`/payments/${id}`);
+    return res.data.response;
   },
   create: async (data: PaymentCreateDTO) => {
-    const res = await api.post<BackendResponse<Payment>>('/payments/', data);
+    const res = await api.post<BackendResponse<Payment>>('/payments/', normalizePaymentPayload(data));
     return res.data.response;
+  },
+  update: async (id: number, data: Partial<PaymentCreateDTO>) => {
+    const res = await api.put<BackendResponse<Payment>>(`/payments/${id}`, normalizePaymentPayload(data));
+    return res.data.response;
+  },
+  delete: async (id: number) => {
+    const res = await api.delete<BackendResponse<null>>(`/payments/${id}`);
+    return res.data;
   },
   getSummary: async (idPaquete?: number, idCita?: number) => {
     if (idPaquete) {
       const res = await api.get<BackendResponse<PaymentSummary>>(`/payments/package-summary/${idPaquete}`);
-      return res.data.response;
+      return normalizePaymentSummary(res.data.response);
     }
 
-    const payments = await paymentService.getAll(undefined, idCita);
-    const abonado = payments.reduce((sum, payment) => sum + Number(payment.valor || 0), 0);
-    return {
-      total: abonado,
-      abonado,
-      saldo: 0,
-      estado: abonado > 0 ? 'PAGADO' : 'PENDIENTE',
-    } satisfies PaymentSummary;
+    if (idCita) {
+      const res = await api.get<BackendResponse<PaymentSummary>>(`/payments/appointment-summary/${idCita}`);
+      return normalizePaymentSummary(res.data.response);
+    }
+
+    return { total: 0, abonado: 0, saldo: 0, estado: 'PENDIENTE' } satisfies PaymentSummary;
   },
   getPackageAllSummary: async (idPaquete: number) => {
     const res = await api.get<BackendResponse<PaymentSummary & { pagos: Payment[] }>>(`/payments/package-all-summary/${idPaquete}`);
+    return { ...res.data.response, ...normalizePaymentSummary(res.data.response) };
+  },
+};
+
+
+
+function normalizePatientPayload(data: Partial<PatientCreateDTO>) {
+  const payload: Record<string, unknown> = { ...data };
+  if (payload.nombres !== undefined && payload.nombre === undefined) payload.nombre = payload.nombres;
+  if (payload.apellidos !== undefined && payload.apellido === undefined) payload.apellido = payload.apellidos;
+  delete payload.nombres;
+  delete payload.apellidos;
+  return payload;
+}
+
+function normalizeAppointmentPayload(data: Partial<AppointmentCreateDTO>) {
+  const payload: Record<string, unknown> = { ...data };
+  if (payload.fecha !== undefined && payload.fecha_agendamiento === undefined) payload.fecha_agendamiento = payload.fecha;
+  if (payload.id_paquete !== undefined && payload.id_paquetes === undefined) payload.id_paquetes = payload.id_paquete;
+  if (payload.observaciones !== undefined && payload.motivo === undefined) payload.motivo = payload.observaciones;
+  delete payload.fecha;
+  delete payload.id_paquete;
+  delete payload.observaciones;
+  return payload;
+}
+
+function normalizePaymentPayload(data: Partial<PaymentCreateDTO>) {
+  const payload: Record<string, unknown> = { ...data };
+  if (typeof payload.tipo === 'string') payload.tipo = payload.tipo.toLowerCase();
+  if (payload.observaciones !== undefined && payload.observacion === undefined) payload.observacion = payload.observaciones;
+  delete payload.observaciones;
+  return payload;
+}
+
+function normalizePaymentSummary(summary: any): PaymentSummary {
+  const total = Number(summary?.total ?? summary?.total_paquete ?? summary?.total_cita ?? 0);
+  const abonado = Number(summary?.abonado ?? summary?.total_abonado ?? 0);
+  const saldo = Number(summary?.saldo ?? summary?.saldo_pendiente ?? Math.max(total - abonado, 0));
+  const rawStatus = String(summary?.estado ?? summary?.estado_pago ?? (saldo <= 0 && total > 0 ? 'pagado' : abonado > 0 ? 'abonado' : 'pendiente')).toUpperCase();
+  const estado = rawStatus === 'PAGADO' || rawStatus === 'ABONADO' ? rawStatus : 'PENDIENTE';
+
+  return { total, abonado, saldo, estado };
+}
+
+function buildReportQuery(params: ReportQueryParams = {}): URLSearchParams {
+  const query = new URLSearchParams();
+  if (params.period) query.set('period', params.period);
+  if (params.startDate) query.set('startDate', params.startDate);
+  if (params.endDate) query.set('endDate', params.endDate);
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  if (params.threshold !== undefined) query.set('threshold', String(params.threshold));
+  return query;
+}
+
+// --- Reports Service ---
+export const reportService = {
+  getDashboard: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<DashboardReport>>(`/reports/dashboard?${query}`);
+    return res.data.response;
+  },
+  getRevenue: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<RevenueByMonth[]>>(`/reports/revenue?${query}`);
+    return res.data.response;
+  },
+  getAppointmentStatusDistribution: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<AppointmentStatusDistribution>>(`/reports/appointments/status-distribution?${query}`);
+    return res.data.response;
+  },
+  getTopProfessionals: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<TopProfessionalReport[]>>(`/reports/professionals/top?${query}`);
+    return res.data.response;
+  },
+  getPackagesByType: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<PackageTypeReport[]>>(`/reports/packages/by-type?${query}`);
+    return res.data.response;
+  },
+  getPackagesNearCompletion: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<NearCompletionPackageReport[]>>(`/reports/packages/near-completion?${query}`);
+    return res.data.response;
+  },
+  getRecentPayments: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<RecentPaymentReport[]>>(`/reports/payments/recent?${query}`);
+    return res.data.response;
+  },
+  getSessionsSummary: async (params: ReportQueryParams = {}) => {
+    const query = buildReportQuery(params);
+    const res = await api.get<BackendResponse<SessionsSummary>>(`/reports/sessions/summary?${query}`);
     return res.data.response;
   },
 };
