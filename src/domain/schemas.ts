@@ -10,19 +10,157 @@ export const loginSchema = z.object({
 });
 
 // --- Paciente ---
+// export const patientSchema = z.object({
+//   tipo_doc: z.enum(['CC', 'TI', 'CE', 'PA', 'NIT'] as const, { message: 'Tipo de documento obligatorio' }),
+//   num_doc: z.string().min(4, 'Documento mínimo 4 caracteres').max(20, 'Documento máximo 20 caracteres'),
+//   nombres: z.string().min(2, 'Nombres obligatorios (mín. 2)').max(100),
+//   apellidos: z.string().min(2, 'Apellidos obligatorios (mín. 2)').max(100),
+//   fecha_nacimiento: z.string().refine((val) => {
+//     const d = new Date(val);
+//     return d instanceof Date && !isNaN(d.getTime()) && d < new Date();
+//   }, 'Fecha de nacimiento inválida o futura'),
+//   telefono: z.string().min(7, 'Teléfono mínimo 7 dígitos').max(15),
+//   email: z.union([z.string().email('Email inválido'), z.literal('')]).optional(),
+//   direccion: z.string().max(200).optional().or(z.literal('')),
+//   antecedentes: z.string().optional().default('Sin antecedentes registrados'),
+//   id_cie: z.number().nullable().optional(),
+// });
 export const patientSchema = z.object({
-  tipo_doc: z.enum(['CC', 'TI', 'CE', 'PA', 'NIT'] as const, { message: 'Tipo de documento obligatorio' }),
-  num_doc: z.string().min(4, 'Documento mínimo 4 caracteres').max(20, 'Documento máximo 20 caracteres'),
-  nombres: z.string().min(2, 'Nombres obligatorios (mín. 2)').max(100),
-  apellidos: z.string().min(2, 'Apellidos obligatorios (mín. 2)').max(100),
+  tipo_doc: z.enum(['CC', 'TI', 'CE', 'PA', 'NIT'] as const, {
+    message: 'Tipo de documento obligatorio',
+  }),
+
+  num_doc: z
+    .string()
+    .min(4, 'Documento mínimo 4 caracteres')
+    .max(20, 'Documento máximo 20 caracteres'),
+
+  nombre: z
+    .string()
+    .min(2, 'Nombres obligatorios (mín. 2)')
+    .max(100, 'Máximo 100 caracteres'),
+
+  apellido: z
+    .string()
+    .min(2, 'Apellidos obligatorios (mín. 2)')
+    .max(100, 'Máximo 100 caracteres'),
+
   fecha_nacimiento: z.string().refine((val) => {
     const d = new Date(val);
     return d instanceof Date && !isNaN(d.getTime()) && d < new Date();
   }, 'Fecha de nacimiento inválida o futura'),
-  telefono: z.string().min(7, 'Teléfono mínimo 7 dígitos').max(15),
-  email: z.union([z.string().email('Email inválido'), z.literal('')]).optional(),
-  direccion: z.string().max(200).optional().or(z.literal('')),
-  antecedentes: z.string().optional().default('Sin antecedentes registrados'),
+
+  telefono: z
+    .string()
+    .min(7, 'Teléfono mínimo 7 dígitos')
+    .max(15, 'Teléfono máximo 15 dígitos'),
+
+  telefono_secundario: z
+    .string()
+    .min(7, 'Teléfono secundario mínimo 7 dígitos')
+    .max(15, 'Teléfono secundario máximo 15 dígitos')
+    .optional()
+    .or(z.literal('')),
+
+  email: z
+    .union([
+      z.string().email('Email inválido'),
+      z.literal(''),
+    ])
+    .optional(),
+
+  direccion: z
+    .string()
+    .max(200, 'Máximo 200 caracteres')
+    .optional()
+    .or(z.literal('')),
+
+  genero: z
+    .enum(['M', 'F', 'O'] as const, {
+      message: 'Género inválido',
+    })
+    .optional()
+    .default('O'),
+
+  zona: z
+    .enum(['U', 'R'] as const, {
+      message: 'Zona inválida',
+    })
+    .optional()
+    .default('U'),
+
+  procedencia: z
+    .string()
+    .max(100, 'Máximo 100 caracteres')
+    .optional()
+    .or(z.literal('')),
+
+  ocupacion: z
+    .string()
+    .max(100, 'Máximo 100 caracteres')
+    .optional()
+    .or(z.literal('')),
+
+  eps: z
+    .string()
+    .max(100, 'Máximo 100 caracteres')
+    .optional()
+    .or(z.literal('')),
+
+  regimen: z
+    .string()
+    .max(50, 'Máximo 50 caracteres')
+    .optional()
+    .or(z.literal('')),
+
+  modalidad_deportiva: z
+    .string()
+    .max(100, 'Máximo 100 caracteres')
+    .optional()
+    .or(z.literal('')),
+
+  red_apoyo: z.boolean().optional(),
+
+  antecedentes: z
+    .string()
+    .optional()
+    .default('Sin antecedentes registrados'),
+
+  antecedentes_personales: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+
+  antecedentes_patologicos: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+
+  antecedentes_quirurgicos: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+
+  antecedentes_traumaticos: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+
+  antecedentes_farmacologicos: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+
+  antecedentes_familiares: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+
+  antecedentes_sociales: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+
   id_cie: z.number().nullable().optional(),
 });
 

@@ -47,31 +47,113 @@ export type TipoDocumento = 'CC' | 'TI' | 'CE' | 'PA' | 'NIT';
 
 export interface Patient {
   id: number;
+
   tipo_doc: TipoDocumento;
   num_doc: string;
+
   nombre: string;
   apellido: string;
+
   fecha_nacimiento: string;
+
   telefono: string;
-  email: string;
-  direccion: string;
-  antecedentes: string;
+  telefono_secundario?: string;
+
+  email?: string;
+
+  direccion?: string;
+
+  genero?: Genero;
+
+  zona?: Zona;
+
+  procedencia?: string;
+
+  ocupacion?: string;
+
+  eps?: string;
+
+  regimen?: string;
+
+  modalidad_deportiva?: string;
+
+  red_apoyo?: boolean;
+
+  antecedentes?: string;
+
+  antecedentes_personales?: string;
+
+  antecedentes_patologicos?: string;
+
+  antecedentes_quirurgicos?: string;
+
+  antecedentes_traumaticos?: string;
+
+  antecedentes_farmacologicos?: string;
+
+  antecedentes_familiares?: string;
+
+  antecedentes_sociales?: string;
+
   id_cie?: number | null;
+
   estado: boolean;
+
   created_at: string;
   updated_at: string;
 }
 
+export type Genero = 'M' | 'F' | 'O';
+export type Zona = 'U' | 'R';
+
 export interface PatientCreateDTO {
   tipo_doc: TipoDocumento;
   num_doc: string;
-  nombres: string;
-  apellidos: string;
+
+  nombre: string;
+  apellido: string;
+
   fecha_nacimiento: string;
+
   telefono: string;
+  telefono_secundario?: string;
+
   email?: string;
+
   direccion?: string;
+
+  genero?: Genero;
+
+  zona?: Zona;
+
+  procedencia?: string;
+
+  ocupacion?: string;
+
+  eps?: string;
+
+  regimen?: string;
+
+  modalidad_deportiva?: string;
+
+  red_apoyo?: boolean;
+
   antecedentes?: string;
+
+  antecedentes_personales?: string;
+
+  antecedentes_patologicos?: string;
+
+  antecedentes_quirurgicos?: string;
+
+  antecedentes_traumaticos?: string;
+
+  antecedentes_farmacologicos?: string;
+
+  antecedentes_familiares?: string;
+
+  antecedentes_sociales?: string;
+
   id_cie?: number | null;
 }
 
@@ -143,10 +225,39 @@ export interface Appointment {
   num_doc_paciente?: string;
   profesional_nombre?: string;
   apellido_profesional?: string;
-  paciente?: Patient;
-  profesional?: Professional;
+  paciente?: string;
+  profesional?: string;
   paquete?: Package;
 }
+
+
+// export interface Appointment {
+//   id: number;
+//   id_paciente: number;
+//   id_profesional: number;
+//   id_paquete?: number | null;
+//   id_paquetes?: number | null;
+//   id_estado_citas?: number | null;
+//   fecha: string;
+//   horario_inicio: string;
+//   horario_fin: string;
+//   hora_inicio?: string;
+//   hora_fin?: string;
+//   numero_sesion?: number | null;
+//   estado: AppointmentStatus;
+//   pagado?: boolean;
+//   motivo?: string;
+//   observaciones: string;
+//   created_at: string;
+//   updated_at: string;
+//   paciente_nombre?: string;
+//   num_doc_paciente?: string;
+//   profesional_nombre?: string;
+//   apellido_profesional?: string;
+//   paciente?: Patient;
+//   profesional?: Professional;
+//   paquete?: Package;
+// }
 
 export interface AppointmentCreateDTO {
   id_paciente: number;
@@ -340,3 +451,20 @@ export interface FormFieldError {
   field: string;
   message: string;
 }
+
+
+export const GENERO_OPTIONS = [
+  { value: 'M', label: 'Masculino' },
+  { value: 'F', label: 'Femenino' },
+  { value: 'O', label: 'Otro' },
+];
+
+export const ZONA_OPTIONS = [
+  { value: 'U', label: 'Urbana' },
+  { value: 'R', label: 'Rural' },
+];
+
+export const RED_APOYO_OPTIONS = [
+  { value: 'true', label: 'Sí' },
+  { value: 'false', label: 'No' },
+];
