@@ -101,12 +101,12 @@ export default function DashboardPage() {
                   <div key={apt.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <Avatar
-                        name={`${apt.paciente?.nombres || ''} ${apt.paciente?.apellidos || ''}`}
+                        name={`${apt.paciente || ''} `}
                         color={avatarColors[i % avatarColors.length]}
                       />
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
-                          {apt.paciente?.nombres} {apt.paciente?.apellidos}
+                          {apt.paciente} 
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {apt.profesional?.nombres} {apt.profesional?.apellidos}
@@ -156,7 +156,7 @@ export default function DashboardPage() {
               title="Pacientes Recientes"
               icon={<Users className="w-5 h-5" />}
               action={
-                <a href="#/patients" className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors">
+                <a href="/patients" className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors">
                   Ver todos <ArrowRight className="w-3.5 h-3.5" />
                 </a>
               }
