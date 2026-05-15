@@ -11,7 +11,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PatientsPage from './pages/patients/PatientsPage';
 import PackagesPage from './pages/PackagesPage';
-import AppointmentsPage from './pages/AppointmentsPage';
+import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import CalendarPage from './pages/CalendarPage';
 import HistoryPage from './pages/HistoryPage';
 import PaymentsPage from './pages/PaymentsPage';
