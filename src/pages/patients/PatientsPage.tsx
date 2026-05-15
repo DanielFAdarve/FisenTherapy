@@ -53,16 +53,56 @@ import { PatientDeleteDialog } from './components/PatientDeleteDialog';
 
 const emptyForm: PatientFormData = {
   tipo_doc: 'CC',
+
   num_doc: '',
-  nombres: '',
-  apellidos: '',
+
+  nombre: '',
+  apellido: '',
+
   fecha_nacimiento: '',
+
   telefono: '',
+  telefono_secundario: '',
+
   email: '',
+
   direccion: '',
+
+  genero: 'O',
+
+  zona: 'U',
+
+  procedencia: '',
+
+  ocupacion: '',
+
+  eps: '',
+
+  regimen: '',
+
+  modalidad_deportiva: '',
+
+  red_apoyo: false,
+
   antecedentes: 'Sin antecedentes registrados',
+
+  antecedentes_personales: '',
+
+  antecedentes_patologicos: '',
+
+  antecedentes_quirurgicos: '',
+
+  antecedentes_traumaticos: '',
+
+  antecedentes_farmacologicos: '',
+
+  antecedentes_familiares: '',
+
+  antecedentes_sociales: '',
+
   id_cie: null,
 };
+
 
 export default function PatientsPage() {
   const fetchPatients = useCallback(
@@ -135,16 +175,14 @@ export default function PatientsPage() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      setPage(1);
-      setSearch(deferredSearch);
+      if (search !== deferredSearch) {
+        setPage(1);
+        setSearch(deferredSearch);
+      }
     }, 400);
 
     return () => clearTimeout(timeout);
-  }, [
-    deferredSearch,
-    setPage,
-    setSearch,
-  ]);
+  }, [deferredSearch, search]);
 
   // ============================================================
   // Handlers
@@ -162,17 +200,71 @@ export default function PatientsPage() {
 
     setForm({
       tipo_doc: patient.tipo_doc,
+
       num_doc: patient.num_doc,
-      nombres: patient.nombre,
-      apellidos: patient.apellido,
+
+      nombre: patient.nombre,
+
+      apellido: patient.apellido,
+
       fecha_nacimiento:
         patient.fecha_nacimiento.split('T')[0],
+
       telefono: patient.telefono,
+
+      telefono_secundario:
+        patient.telefono_secundario || '',
+
       email: patient.email || '',
+
       direccion: patient.direccion || '',
+
+      genero: patient.genero || 'O',
+
+      zona: patient.zona || 'U',
+
+      procedencia:
+        patient.procedencia || '',
+
+      ocupacion:
+        patient.ocupacion || '',
+
+      eps: patient.eps || '',
+
+      regimen:
+        patient.regimen || '',
+
+      modalidad_deportiva:
+        patient.modalidad_deportiva || '',
+
+      red_apoyo:
+        patient.red_apoyo || false,
+
       antecedentes:
         patient.antecedentes ||
-        'Sin antecedentes registrados',
+        '',
+
+      antecedentes_personales:
+        patient.antecedentes_personales || '',
+
+      antecedentes_patologicos:
+        patient.antecedentes_patologicos || '',
+
+      antecedentes_quirurgicos:
+        patient.antecedentes_quirurgicos || '',
+
+      antecedentes_traumaticos:
+        patient.antecedentes_traumaticos || '',
+
+      antecedentes_farmacologicos:
+        patient.antecedentes_farmacologicos || '',
+
+      antecedentes_familiares:
+        patient.antecedentes_familiares || '',
+
+      antecedentes_sociales:
+        patient.antecedentes_sociales || '',
+
       id_cie: patient.id_cie || null,
     });
 
