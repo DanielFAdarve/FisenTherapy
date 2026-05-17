@@ -14,15 +14,12 @@ const avatarColors = ['teal', 'blue', 'purple', 'amber', 'emerald', 'rose'] as c
 const formatTime = (value?: string) => (value ? value.slice(0, 5) : '--:--');
 
 const patientName = (appointment: Appointment) =>
-  appointment.paciente_nombre ||
-  [appointment.paciente?.nombre, appointment.paciente?.apellido]
-    .filter(Boolean)
-    .join(' ') ||
+  appointment.paciente ||
   'Paciente sin nombre';
 
 const professionalName = (appointment: Appointment) =>
   appointment.profesional_nombre ||
-  [appointment.profesional?.nombre, appointment.profesional?.apellido]
+  [appointment.profesional, appointment.apellido_profesional]
     .filter(Boolean)
     .join(' ') ||
   'Profesional sin asignar';
@@ -33,7 +30,7 @@ export function AppointmentsList({ appointments, onEdit, onCancel }: Props) {
       {appointments.map((appointment, index) => {
         const isClosed = appointment.estado === 'CANCELADA' || appointment.estado === 'COMPLETADA';
         const name = patientName(appointment);
-
+        console.log(appointment);
         return (
           <div
             key={appointment.id}
