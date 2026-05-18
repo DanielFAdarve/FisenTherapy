@@ -15,7 +15,7 @@ import {
   Payment, PaymentCreateDTO, PaymentSummary,
   PaginationParams, PaginatedResult, ReportQueryParams, DashboardReport, RevenueByMonth,
   AppointmentStatusDistribution, TopProfessionalReport, PackageTypeReport, NearCompletionPackageReport,
-  RecentPaymentReport, SessionsSummary,
+  RecentPaymentReport, SessionsSummary, HistoryQuoteContext,
 } from '../domain/models';
 
 // --- Auth Service ---
@@ -168,6 +168,10 @@ export const appointmentService = {
     const result = await appointmentService.getPaginated({ page, limit, filters });
     return result.data;
   },
+  getById: async (idCita: number) => {
+    const res = await api.get<BackendResponse<any>>(`/quotes/${idCita}`);
+    return normalizeAppointment(res.data.response);
+  },
   getByPackage: async (idPackage: number) => {
     const res = await api.get<BackendResponse<any[]>>(`/quotes/get-by-package/${idPackage}`);
     return (res.data.response ?? []).map(normalizeAppointment);
@@ -200,10 +204,13 @@ export const appointmentService = {
 
 // --- Clinical History Service ---
 export const historyService = {
+  getQuoteContext: async (idCita: number): Promise<HistoryQuoteContext> => {
+    const res = await api.get<BackendResponse<any>>(`/history/get-by-quote/${idCita}`);
+    return normalizeHistoryQuoteContext(res.data.response);
+  },
   getByAppointment: async (idCita: number) => {
-    const res = await api.get<BackendResponse<any | any[]>>(`/history/get-by-quote/${idCita}`);
-    const payload = Array.isArray(res.data.response) ? res.data.response : [res.data.response].filter(Boolean);
-    return payload.map(normalizeClinicalHistory);
+    const context = await historyService.getQuoteContext(idCita);
+    return context.historia ? [context.historia] : [];
   },
   getByPatient: async (idPaciente: number, params: PaginationParams = {}) => {
     const query = buildQueryParams({ page: 1, limit: 20, ...params });
@@ -418,6 +425,8 @@ function normalizeAppointment(data: any): Appointment {
     updated_at: data?.updated_at ?? '',
     agendamiento: data?.agendamiento,
     HistoryQuotes: data?.HistoryQuotes ?? [],
+    tiene_historia: Boolean(data?.tiene_historia ?? data?.agendamiento?.tiene_historia ?? (data?.HistoryQuotes ?? []).length > 0),
+    id_historial: data?.id_historial ?? data?.agendamiento?.id_historial ?? data?.HistoryQuotes?.[0]?.id ?? null,
   } as Appointment;
 }
 
@@ -441,6 +450,93 @@ function normalizeAppointmentPayload(data: Partial<AppointmentCreateDTO>) {
   if (payload.id_estado_citas === undefined) payload.id_estado_citas = 1;
   if (payload.recordatorio === undefined) payload.recordatorio = false;
   return payload;
+}
+
+function normalizeHistoryQuoteContext(data: any): HistoryQuoteContext {
+  const source = data?.response ?? data ?? {};
+  const flatPatient = source?.nombre || source?.apellido || source?.num_doc ? {
+    id: Number(source?.id_paciente ?? source?.id_pacientes ?? source?.patient?.id ?? 0),
+    tipo_doc: source?.tipo_doc ?? 'CC',
+    num_doc: source?.num_doc ?? '',
+    nombre: source?.nombre ?? '',
+    apellido: source?.apellido ?? '',
+    fecha_nacimiento: source?.fecha_nacimiento ?? '',
+    telefono: source?.telefono ?? '',
+    telefono_secundario: source?.telefono_secundario ?? '',
+    email: source?.email ?? '',
+    eps: source?.eps ?? '',
+    ocupacion: source?.ocupacion ?? '',
+    modalidad_deportiva: source?.modalidad_deportiva ?? '',
+    antecedentes: source?.antecedentes ?? '',
+    antecedentes_personales: source?.antecedentes_personales ?? '',
+    antecedentes_patologicos: source?.antecedentes_patologicos ?? '',
+    antecedentes_quirurgicos: source?.antecedentes_quirurgicos ?? '',
+    antecedentes_traumaticos: source?.antecedentes_traumaticos ?? '',
+    antecedentes_farmacologicos: source?.antecedentes_farmacologicos ?? '',
+    antecedentes_familiares: source?.antecedentes_familiares ?? '',
+    antecedentes_sociales: source?.antecedentes_sociales ?? '',
+    id_cie: source?.cie10_paciente?.id ?? null,
+    estado: true,
+    created_at: '',
+    updated_at: '',
+  } as Patient : null;
+  const flatQuote = source?.id_cita ? {
+    id: source.id_cita,
+    id_paciente: flatPatient?.id ?? source?.id_paciente ?? 0,
+    id_profesional: source?.id_profesional ?? 0,
+    id_paquete: source?.id_paquete ?? null,
+    fecha: source?.fecha,
+    horario_inicio: source?.hora_inicio,
+    horario_fin: source?.hora_fin,
+    numero_sesion: source?.numero_sesion,
+    estado: source?.estado_cita ?? 'PROGRAMADA',
+    motivo: source?.motivo,
+    observaciones: source?.motivo ?? '',
+    paciente: flatPatient ? [flatPatient.nombre, flatPatient.apellido].filter(Boolean).join(' ') : '',
+    paciente_nombre: flatPatient ? [flatPatient.nombre, flatPatient.apellido].filter(Boolean).join(' ') : '',
+    num_doc_paciente: flatPatient?.num_doc,
+    profesional: source?.profesional,
+    profesional_nombre: source?.profesional,
+    tipo_paquete: source?.tipo_paquete,
+    sesiones_totales_paquete: source?.sesiones_totales_paquete,
+    tiene_historia: Boolean(source?.id_historial),
+    id_historial: source?.id_historial ?? null,
+    created_at: '',
+    updated_at: '',
+  } : null;
+  const rawHistory = source?.historia ?? source?.history ?? source?.HistoryQuotes?.[0] ?? (source?.id_historial ? {
+    id: source.id_historial,
+    id_cita: source.id_cita,
+    id_cie: source?.cie10_historia?.id,
+    fecha_evolucion: source?.fecha,
+    descripcion_estado_paciente: source?.descripcion_estado_paciente,
+    subjetivo: source?.subjetivo,
+    objetivo: source?.objetivo,
+    intervencion: source?.intervencion,
+    recomendaciones: source?.recomendaciones,
+    cita: flatQuote,
+    cie10_historia: source?.cie10_historia,
+  } : null);
+  const rawQuote = source?.cita ?? source?.quote ?? source?.Quotes ?? rawHistory?.Quotes ?? rawHistory?.cita ?? flatQuote ?? source;
+  const rawPatient = source?.paciente ?? source?.patient ?? flatPatient ?? rawQuote?.patient ?? rawQuote?.paciente ?? rawQuote?.package?.patient ?? rawQuote?.paquete?.patient ?? null;
+  const history = rawHistory ? normalizeClinicalHistory({
+    ...rawHistory,
+    cita: rawHistory?.cita ?? rawHistory?.Quotes ?? rawQuote,
+    cie10_historia: source?.cie10_historia ?? rawHistory?.cie10_historia ?? rawHistory?.Cie10 ?? rawHistory?.cie10,
+  }) : null;
+  const quote = rawQuote && (rawQuote.id || rawQuote.id_cita) ? normalizeAppointment(rawQuote) : history?.cita ?? null;
+  const patient = rawPatient && typeof rawPatient === 'object' ? rawPatient as Patient : quote?.package?.patient ?? quote?.paquete?.patient ?? null;
+  const idHistorial = Number(source?.id_historial ?? history?.id ?? 0) || null;
+
+  return {
+    cita: quote,
+    paciente: patient,
+    historia: history,
+    id_historial: idHistorial,
+    tiene_historia: Boolean(source?.tiene_historia ?? idHistorial),
+    cie10_historia: source?.cie10_historia ?? history?.cie10 ?? null,
+    cie10_paciente: source?.cie10_paciente ?? null,
+  };
 }
 
 function normalizeClinicalHistory(data: any): ClinicalHistory {

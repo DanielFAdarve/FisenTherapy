@@ -287,7 +287,10 @@ export interface Appointment {
   agendamiento?: AppointmentSchedulingSummary;
   tipo_paquete?: string;
   sesiones_totales_paquete?: number;
+  tiene_historia?: boolean;
+  id_historial?: number | null;
 }
+
 
 
 export interface AppointmentCreateDTO {
@@ -323,7 +326,20 @@ export interface ClinicalHistory {
   updated_at: string;
   cita?: Appointment;
   cie10?: Cie10;
+  Cie10?: Cie10;
+  Quotes?: Appointment;
 }
+
+export interface HistoryQuoteContext {
+  cita: Appointment | null;
+  paciente: Patient | null;
+  historia: ClinicalHistory | null;
+  id_historial: number | null;
+  tiene_historia: boolean;
+  cie10_historia?: Cie10 | null;
+  cie10_paciente?: Cie10 | null;
+}
+
 
 export interface ClinicalHistoryCreateDTO {
   id_cita: number;
@@ -345,6 +361,7 @@ export interface ClinicalHistoryCreateDTO {
   antecedentes_sociales?: string;
   antecedentes_sincronizados?: boolean;
 }
+
 
 // --- CIE10 ---
 export interface Cie10 {

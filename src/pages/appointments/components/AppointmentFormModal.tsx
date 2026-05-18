@@ -131,6 +131,24 @@ export function AppointmentFormModal({
           error={errors.id_paquete}
         />
 
+        {form.id_paquete && patientPackages.find((pkg) => pkg.id === form.id_paquete) && (
+          <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-3 text-sm text-teal-900">
+            {(() => {
+              const selectedPackage = patientPackages.find((pkg) => pkg.id === form.id_paquete)!;
+              return (
+                <>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">Paquete seleccionado para esta cita</p>
+                  <p className="font-bold">{selectedPackage.nombre}</p>
+                  <p className="text-xs text-teal-700">
+                    {selectedPackage.sesiones_realizadas}/{selectedPackage.cantidad_sesiones} sesiones usadas · {selectedPackage.sesiones_disponibles ?? selectedPackage.resumen_sesiones?.sesiones_disponibles ?? 0} disponibles
+                    {selectedPackage.tiene_cita_actual ? ' · paquete actual de la cita' : ''}
+                  </p>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         {form.id_paciente && patientPackages.length === 0 && (
           <Alert
             type="info"

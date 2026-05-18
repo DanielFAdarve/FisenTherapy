@@ -13,6 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Calendar, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import {
   appointmentService,
@@ -87,7 +88,36 @@ const getAppointmentPackageId = (appointment: Appointment) =>
 
 const getAppointmentPackage = (appointment: Appointment) => appointment.package ?? appointment.paquete ?? null;
 
+
+const buildPackageFromAppointment = (appointment: Appointment): FisentPackage | null => {
+  const packageId = getAppointmentPackageId(appointment);
+  if (!packageId) return null;
+  const source = getAppointmentPackage(appointment);
+  const total = Number(appointment.sesiones_totales_paquete ?? source?.cantidad_sesiones ?? appointment.numero_sesion ?? 1);
+  const used = Number(source?.sesiones_realizadas ?? appointment.numero_sesion ?? 0);
+  const name = appointment.tipo_paquete || source?.nombre || source?.attentionPackage?.descripcion || `Paquete #${packageId}`;
+  return {
+    ...(source ?? {}),
+    id: packageId,
+    id_paquete: packageId,
+    id_paciente: source?.id_paciente || appointment.id_paciente,
+    id_pacientes: source?.id_pacientes || appointment.id_paciente,
+    id_profesional: source?.id_profesional ?? appointment.id_profesional,
+    tipo_paquete: source?.tipo_paquete || name,
+    nombre: name,
+    cantidad_sesiones: total,
+    sesiones_realizadas: used,
+    sesiones_disponibles: Math.max(total - used, 0),
+    estado: source?.estado || 'ACTIVO',
+    fecha_inicio: source?.fecha_inicio || '',
+    created_at: source?.created_at || '',
+    updated_at: source?.updated_at || '',
+    tiene_cita_actual: true,
+  } as FisentPackage;
+};
+
 export default function AppointmentsPage() {
+  const navigate = useNavigate();
   const [filterDate, setFilterDate] = useState(today());
   const [searchInput, setSearchInput] = useState('');
 
@@ -199,7 +229,7 @@ export default function AppointmentsPage() {
 
   const openEdit = useCallback((appointment: Appointment) => {
     setEditingAppt(appointment);
-    const selectedPackage = getAppointmentPackage(appointment);
+    const selectedPackage = getAppointmentPackage(appointment) ?? buildPackageFromAppointment(appointment);
     const selectedPackageId = getAppointmentPackageId(appointment);
     const appointmentPatient = selectedPackage?.patient ?? selectedPackage?.paciente;
 
@@ -521,6 +551,7 @@ export default function AppointmentsPage() {
             appointments={appointments}
             onEdit={openEdit}
             onCancel={setConfirmCancel}
+            onOpenHistory={(appointment) => navigate(`/history?quote=${appointment.id}`)}
           />
         )}
 
