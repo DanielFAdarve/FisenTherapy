@@ -164,23 +164,20 @@ export const patientSchema = z.object({
   id_cie: z.number().nullable().optional(),
 });
 
-// --- Paquete ---
+// --- Paquete asignado al paciente ---
 export const packageSchema = z.object({
-  id_paciente: z.number().min(1, 'Seleccione un paciente'),
-  tipo_paquete: z.enum(['REHABILITACION', 'TERAPIA', 'EVALUACION', 'MANTENIMIENTO'] as const, { message: 'Tipo de paquete obligatorio' }),
-  nombre: z.string().min(3, 'Nombre del paquete obligatorio').max(100),
-  cantidad_sesiones: z.number().min(1, 'Mínimo 1 sesión').max(100, 'Máximo 100 sesiones'),
-  fecha_inicio: z.string().refine((val) => {
-    const d = new Date(val);
-    return d instanceof Date && !isNaN(d.getTime());
-  }, 'Fecha de inicio inválida'),
+  id_pacientes: z.number().min(1, 'Seleccione un paciente'),
+  id_paquetes_atenciones: z.number().min(1, 'Seleccione un tipo de paquete'),
+  id_profesional: z.number().min(1, 'Seleccione un profesional'),
+  id_cie_secundario: z.number().nullable().optional(),
+  id_estado_citas: z.number().optional().default(1),
 });
 
 // --- Cita ---
 export const appointmentSchema = z.object({
   id_paciente: z.number().min(1, 'Seleccione un paciente'),
   id_profesional: z.number().min(1, 'Seleccione un profesional'),
-  id_paquete: z.number().nullable().optional(),
+  id_paquete: z.number().nullable().refine((value) => Boolean(value), 'Seleccione o cree un paquete para la cita'),
   fecha: z.string().refine((val) => {
     const d = new Date(val);
     return d instanceof Date && !isNaN(d.getTime()) && d >= new Date(new Date().toDateString());

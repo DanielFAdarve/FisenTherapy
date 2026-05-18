@@ -163,29 +163,64 @@ export interface PatientUpdateDTO extends Partial<PatientCreateDTO> {
 
 // --- Paquetes ---
 export type PackageType = 'REHABILITACION' | 'TERAPIA' | 'EVALUACION' | 'MANTENIMIENTO';
-export type PackageStatus = 'ACTIVO' | 'CERRADO' | 'CANCELADO';
+export type PackageStatus = 'ACTIVO' | 'CERRADO' | 'CANCELADO' | 'AGENDADA' | 'COMPLETADA';
+
+export interface PackageSessionSummary {
+  sesiones_totales: number;
+  sesiones_usadas: number;
+  sesiones_disponibles: number;
+  completo: boolean;
+}
+
+export interface PackageAttentionCatalog {
+  id: number;
+  descripcion: string;
+  cantidad_sesiones: number;
+  valor: number;
+}
 
 export interface Package {
   id: number;
+  id_paquete?: number;
   id_paciente: number;
-  tipo_paquete: PackageType;
+  id_pacientes?: number;
+  id_paquetes_atenciones?: number;
+  id_tipo_paquete?: number;
+  id_profesional?: number | null;
+  id_cie_secundario?: number | null;
+  id_estado_citas?: number | null;
+  tipo_paquete: PackageType | string;
+  tipo_paquete_nombre?: string;
   nombre: string;
+  descripcion?: string;
   cantidad_sesiones: number;
   sesiones_realizadas: number;
-  estado: PackageStatus;
+  sesiones_disponibles?: number;
+  estado: PackageStatus | string;
   fecha_inicio: string;
   fecha_fin?: string | null;
+  valor?: number;
   created_at: string;
   updated_at: string;
   paciente?: Patient;
+  patient?: Patient;
+  attentionPackage?: PackageAttentionCatalog;
+  statusPackage?: { id: number; descripcion?: string; nombre?: string; estado?: string };
+  professional?: Professional;
+  secondaryDiagnosis?: Cie10;
+  resumen_sesiones?: PackageSessionSummary;
+  Quotes?: Appointment[];
+  profesional?: string;
+  motivo_secundario?: string;
+  tiene_cita_actual?: boolean;
 }
 
 export interface PackageCreateDTO {
-  id_paciente: number;
-  tipo_paquete: PackageType;
-  nombre: string;
-  cantidad_sesiones: number;
-  fecha_inicio: string;
+  id_pacientes: number;
+  id_paquetes_atenciones: number;
+  id_profesional: number;
+  id_cie_secundario?: number | null;
+  id_estado_citas?: number;
 }
 
 // --- Profesionales ---

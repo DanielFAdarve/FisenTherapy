@@ -11,7 +11,7 @@ import {
   Professional,
   Appointment, AppointmentCreateDTO, AppointmentUpdateDTO,
   ClinicalHistory, ClinicalHistoryCreateDTO,
-  Cie10, Cie10CreateDTO,
+  Cie10, Cie10CreateDTO, PackageAttentionCatalog,
   Payment, PaymentCreateDTO, PaymentSummary,
   PaginationParams, PaginatedResult, ReportQueryParams, DashboardReport, RevenueByMonth,
   AppointmentStatusDistribution, TopProfessionalReport, PackageTypeReport, NearCompletionPackageReport,
@@ -69,10 +69,10 @@ export const patientService = {
 export const packageService = {
   getCatalogPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<FisentPackage>> => {
     const query = buildQueryParams(params);
-    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-packages?${query}`, { signal });
+    const res = await api.get<BackendResponse<PackageAttentionCatalog[]>>(`/packages/get-packages?${query}`, { signal });
 
     return {
-      data: res.data.response,
+      data: (res.data.response ?? []).map(normalizePackageCatalog) as unknown as FisentPackage[],
       pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
     };
   },
@@ -82,11 +82,12 @@ export const packageService = {
   },
   getAssignedPaginated: async (params: PaginationParams = {}, signal?: AbortSignal): Promise<PaginatedResult<FisentPackage>> => {
     const query = buildQueryParams(params);
-    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-assigned?${query}`, { signal });
+    const res = await api.get<BackendResponse<any[]>>(`/packages/get-assigned?${query}`, { signal });
+    const packages = (res.data.response ?? []).map(normalizePackage);
 
     return {
-      data: res.data.response,
-      pagination: res.data.pagination ?? fallbackPagination(res.data.response, params.page, params.limit),
+      data: packages,
+      pagination: res.data.pagination ?? fallbackPagination(packages, params.page, params.limit),
     };
   },
   // Compatibilidad: las pantallas actuales trabajan con paquetes asignados, no con el catálogo.
@@ -95,25 +96,25 @@ export const packageService = {
     return result.data;
   },
   getByPatient: async (idPaciente: number) => {
-    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-by-patient/${idPaciente}`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<any[]>>(`/packages/get-by-patient/${idPaciente}`);
+    return (res.data.response ?? []).map(normalizePackage);
   },
   getAvailableByPatient: async (idPaciente: number, quoteId?: number) => {
     const query = quoteId ? `?quoteId=${encodeURIComponent(String(quoteId))}` : '';
-    const res = await api.get<BackendResponse<FisentPackage[]>>(`/packages/get-available-by-patient/${idPaciente}${query}`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<any[]>>(`/packages/get-available-by-patient/${idPaciente}${query}`);
+    return (res.data.response ?? []).map(normalizePackage);
   },
   getById: async (id: number) => {
-    const res = await api.get<BackendResponse<FisentPackage>>(`/packages/get/${id}`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<any>>(`/packages/get/${id}`);
+    return normalizePackage(res.data.response);
   },
   create: async (data: PackageCreateDTO) => {
-    const res = await api.post<BackendResponse<FisentPackage>>('/packages/create', data);
-    return res.data.response;
+    const res = await api.post<BackendResponse<any>>('/packages/create', normalizePackageCreatePayload(data));
+    return normalizePackage(res.data.response);
   },
   close: async (id: number) => {
-    const res = await api.put<BackendResponse<FisentPackage>>(`/packages/close/${id}`);
-    return res.data.response;
+    const res = await api.put<BackendResponse<any>>(`/packages/close/${id}`);
+    return normalizePackage(res.data.response);
   },
 };
 
@@ -160,12 +161,12 @@ export const appointmentService = {
   },
   create: async (data: AppointmentCreateDTO) => {
     const res = await api.post<BackendResponse<any>>('/quotes/create', normalizeAppointmentPayload(data));
-    return normalizeAppointment(res.data.response);
+    return normalizeAppointment(res.data.response?.cita ?? res.data.response);
   },
   update: async (data: AppointmentUpdateDTO) => {
     const { id, ...rest } = data;
-    const res = await api.put<BackendResponse<any>>(`/quotes/${id}`, normalizeAppointmentPayload(rest));
-    return normalizeAppointment(res.data.response);
+    const res = await api.put<BackendResponse<any>>(`/quotes/update/${id}`, normalizeAppointmentPayload(rest));
+    return normalizeAppointment(res.data.response?.cita ?? res.data.response);
   },
   cancel: async (id: number) => {
     const res = await api.delete<BackendResponse<Appointment>>(`/quotes/${id}`);
@@ -303,23 +304,92 @@ export const paymentService = {
   },
 };
 
+function normalizePackageCatalog(data: any): PackageAttentionCatalog {
+  return {
+    id: Number(data?.id ?? 0),
+    descripcion: data?.descripcion ?? data?.nombre ?? '',
+    cantidad_sesiones: Number(data?.cantidad_sesiones ?? 0),
+    valor: Number(data?.valor ?? 0),
+  };
+}
 
+function normalizePackage(data: any): FisentPackage {
+  const attentionPackage = data?.attentionPackage ?? data?.attention_package ?? data?.paquete_atencion ?? null;
+  const resumen = data?.resumen_sesiones ?? {};
+  const id = Number(data?.id_paquete ?? data?.id ?? 0);
+  const sesionesTotales = Number(resumen?.sesiones_totales ?? data?.sesiones_totales ?? attentionPackage?.cantidad_sesiones ?? data?.cantidad_sesiones ?? 0);
+  const sesionesUsadas = Number(resumen?.sesiones_usadas ?? data?.sesiones_usadas ?? data?.sesiones_realizadas ?? 0);
+  const sesionesDisponibles = Number(resumen?.sesiones_disponibles ?? data?.sesiones_disponibles ?? Math.max(sesionesTotales - sesionesUsadas, 0));
+  const patient = data?.patient ?? data?.paciente;
+  const status = data?.statusPackage ?? data?.status ?? data?.estado;
+  const statusText = typeof status === 'string' ? status : status?.descripcion ?? status?.nombre ?? status?.estado;
+  const description = data?.tipo_paquete ?? attentionPackage?.descripcion ?? data?.nombre ?? data?.descripcion ?? `Paquete #${id}`;
 
+  return {
+    ...data,
+    id,
+    id_paquete: id,
+    id_paciente: Number(data?.id_paciente ?? data?.id_pacientes ?? patient?.id ?? 0),
+    id_pacientes: Number(data?.id_pacientes ?? data?.id_paciente ?? patient?.id ?? 0),
+    id_paquetes_atenciones: Number(data?.id_paquetes_atenciones ?? data?.id_tipo_paquete ?? attentionPackage?.id ?? 0),
+    id_tipo_paquete: Number(data?.id_tipo_paquete ?? data?.id_paquetes_atenciones ?? attentionPackage?.id ?? 0),
+    id_profesional: data?.id_profesional ?? data?.professional?.id ?? null,
+    id_cie_secundario: data?.id_cie_secundario ?? data?.secondaryDiagnosis?.id ?? null,
+    tipo_paquete: description,
+    tipo_paquete_nombre: description,
+    nombre: data?.nombre ?? description,
+    descripcion: data?.descripcion ?? description,
+    cantidad_sesiones: sesionesTotales,
+    sesiones_realizadas: sesionesUsadas,
+    sesiones_disponibles: sesionesDisponibles,
+    estado: statusText ?? (resumen?.completo ? 'CERRADO' : 'ACTIVO'),
+    fecha_inicio: data?.fecha_inicio ?? data?.created_at ?? '',
+    fecha_fin: data?.fecha_fin ?? null,
+    created_at: data?.created_at ?? '',
+    updated_at: data?.updated_at ?? '',
+    paciente: patient,
+    patient,
+    attentionPackage: attentionPackage ? normalizePackageCatalog(attentionPackage) : data?.attentionPackage,
+    resumen_sesiones: {
+      sesiones_totales: sesionesTotales,
+      sesiones_usadas: sesionesUsadas,
+      sesiones_disponibles: sesionesDisponibles,
+      completo: Boolean(resumen?.completo ?? sesionesDisponibles <= 0),
+    },
+  } as FisentPackage;
+}
+
+function normalizePackageCreatePayload(data: Partial<FisentPackage> | Record<string, unknown>) {
+  const payload: Record<string, unknown> = { ...data };
+  if (payload.id_paciente !== undefined && payload.id_pacientes === undefined) payload.id_pacientes = payload.id_paciente;
+  if (payload.id_tipo_paquete !== undefined && payload.id_paquetes_atenciones === undefined) payload.id_paquetes_atenciones = payload.id_tipo_paquete;
+  if (payload.id_estado_citas === undefined) payload.id_estado_citas = 1;
+  delete payload.id_paciente;
+  delete payload.id_tipo_paquete;
+  delete payload.tipo_paquete;
+  delete payload.nombre;
+  delete payload.cantidad_sesiones;
+  delete payload.fecha_inicio;
+  return payload;
+}
 
 function normalizeAppointment(data: any): Appointment {
+  data = data?.cita ?? data;
   const pacienteNombre = typeof data?.paciente === 'string'
     ? data.paciente
     : [data?.paciente?.nombre, data?.paciente?.apellido].filter(Boolean).join(' ');
   const profesionalNombre = typeof data?.profesional === 'string'
     ? [data.profesional, data?.apellido_profesional].filter(Boolean).join(' ')
     : [data?.profesional?.nombre, data?.profesional?.apellido].filter(Boolean).join(' ');
-  const idPaquete = data?.id_paquete ?? data?.id_paquetes ?? null;
+  const idPaquete = data?.id_paquete ?? data?.id_paquetes ?? data?.package?.id ?? null;
   const horarioInicio = data?.horario_inicio ?? data?.hora_inicio ?? '';
   const horarioFin = data?.horario_fin ?? data?.hora_fin ?? '';
   const observaciones = data?.observaciones ?? data?.motivo ?? '';
 
   return {
     ...data,
+    id_paciente: Number(data?.id_paciente ?? data?.id_pacientes ?? data?.package?.id_pacientes ?? data?.package?.patient?.id ?? 0),
+    id_profesional: Number(data?.id_profesional ?? data?.professional?.id ?? data?.package?.id_profesional ?? 0),
     id_paquete: idPaquete,
     id_paquetes: data?.id_paquetes ?? idPaquete,
     fecha: data?.fecha ?? data?.fecha_agendamiento ?? '',

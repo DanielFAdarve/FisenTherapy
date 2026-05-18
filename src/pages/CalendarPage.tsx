@@ -4,11 +4,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   appointmentService, patientService, professionalService,
-  packageService, paymentService,
+  packageService, paymentService, cie10Service,
 } from '../data-access/services';
 import {
   Appointment, AppointmentCreateDTO, Patient, Professional,
-  Package as FisentPackage, PackageCreateDTO, PackageType,
+  Package as FisentPackage, PackageCreateDTO,
   PaymentCreateDTO, PaymentMethod,
 } from '../domain/models';
 import { appointmentSchema, packageSchema } from '../domain/schemas';
@@ -49,9 +49,8 @@ interface CalendarState {
     observaciones: string;
   };
   newPackageData: {
-    tipo_paquete: PackageType;
-    nombre: string;
-    cantidad_sesiones: number;
+    id_paquetes_atenciones: number;
+    id_cie_secundario: number;
   };
   paymentData: {
     valor: number;
@@ -64,12 +63,6 @@ interface CalendarState {
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const avatarColors = ['teal', 'blue', 'purple', 'amber', 'emerald', 'rose'] as const;
-const PACKAGE_TYPES = [
-  { value: 'REHABILITACION', label: 'Rehabilitacion' },
-  { value: 'TERAPIA', label: 'Terapia' },
-  { value: 'EVALUACION', label: 'Evaluacion' },
-  { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
-];
 const PAYMENT_METHODS = [
   { value: 'EFECTIVO', label: 'Efectivo' },
   { value: 'TARJETA', label: 'Tarjeta' },
@@ -83,7 +76,7 @@ const emptyCreateData = {
   fecha: '', horario_inicio: '08:00', horario_fin: '09:00', observaciones: '',
 };
 
-const emptyNewPackage = { tipo_paquete: 'REHABILITACION' as PackageType, nombre: '', cantidad_sesiones: 10 };
+const emptyNewPackage = { id_paquetes_atenciones: 0, id_cie_secundario: 0 };
 const emptyPayment = { valor: 0, metodo_pago: 'EFECTIVO' as PaymentMethod, observaciones: '' };
 
 // ============================================================
@@ -96,6 +89,8 @@ export default function CalendarPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [packages, setPackages] = useState<FisentPackage[]>([]);
+  const [packageCatalog, setPackageCatalog] = useState<FisentPackage[]>([]);
+  const [cies, setCies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -124,20 +119,18 @@ export default function CalendarPage() {
           ? format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 6), 'yyyy-MM-dd')
           : format(currentDate, 'yyyy-MM-dd');
 
-      const [appts, pts, pros, pkgs] = await Promise.all([
-        appointmentService.getAll().catch(() => []),
+      const [apptsResult, pts, pros] = await Promise.all([
+        appointmentService.getPaginated({
+          page: 1,
+          limit: 200,
+          filters: { fechaInicio: startDate, fechaFin: endDate },
+        }).catch(() => ({ data: [] as Appointment[] })),
         patientService.getAll().catch(() => []),
         professionalService.getAll().catch(() => []),
-        packageService.getAll().catch(() => []),
       ]);
-      const filtered = (appts || []).filter((a: Appointment) => {
-        const d = a.fecha.split('T')[0];
-        return d >= startDate && d <= endDate;
-      });
-      setAppointments(filtered);
+      setAppointments(apptsResult.data || []);
       setPatients(pts || []);
       setProfessionals(pros || []);
-      setPackages(pkgs || []);
     } catch (err: any) {
       toast.error(err?.message || 'Error al cargar datos');
     } finally { setLoading(false); }
@@ -178,7 +171,7 @@ export default function CalendarPage() {
   };
 
   const patientHasActivePackages = (patientId: number): FisentPackage[] => {
-    return packages.filter(p => p.id_paciente === patientId && p.estado === 'ACTIVO' && p.sesiones_realizadas < p.cantidad_sesiones);
+    return packages.filter(p => p.id_paciente === patientId && ((p.sesiones_disponibles ?? p.resumen_sesiones?.sesiones_disponibles ?? 0) > 0 || Boolean(p.tiene_cita_actual)));
   };
 
   const updateCreateData = (field: string, value: any) => {
@@ -233,44 +226,53 @@ export default function CalendarPage() {
       setState(s => ({ ...s, errors: { id_paciente: 'Seleccione un paciente' } }));
       return;
     }
-    const activePkgs = patientHasActivePackages(state.createData.id_paciente);
-    if (activePkgs.length === 0) {
-      // No active packages → prompt to create one
-      goStep('create-step2b-new-package');
-    } else {
-      // Has packages → select one
-      goStep('create-step2-package');
-    }
+    setSaving(true);
+    packageService.getAvailableByPatient(state.createData.id_paciente)
+      .then((available) => {
+        setPackages((current) => [
+          ...(available || []),
+          ...current.filter((pkg) => pkg.id_paciente !== state.createData.id_paciente),
+        ]);
+        if ((available || []).length === 0) {
+          goStep('create-step2b-new-package');
+        } else {
+          goStep('create-step2-package');
+        }
+      })
+      .catch(() => goStep('create-step2b-new-package'))
+      .finally(() => setSaving(false));
+  };
+
+
+  const loadPackageCreationCatalogs = async () => {
+    if (packageCatalog.length > 0 && cies.length > 0) return;
+    const [catalogResult, ciesResult] = await Promise.allSettled([
+      packageService.getCatalog(undefined, 1, 50),
+      cie10Service.getAll(undefined, 1, 50),
+    ]);
+    if (catalogResult.status === 'fulfilled') setPackageCatalog(catalogResult.value || []);
+    if (ciesResult.status === 'fulfilled') setCies(ciesResult.value || []);
   };
 
   // Step 2b: Create new package for patient
   const handleCreatePackage = async () => {
     const pkgData = {
-      id_paciente: state.createData.id_paciente,
-      ...state.newPackageData,
-      fecha_inicio: state.createData.fecha,
+      id_pacientes: state.createData.id_paciente,
+      id_paquetes_atenciones: state.newPackageData.id_paquetes_atenciones,
+      id_profesional: state.createData.id_profesional,
+      id_cie_secundario: state.newPackageData.id_cie_secundario || null,
+      id_estado_citas: 1,
     };
     const result = packageSchema.safeParse(pkgData);
     if (!result.success) {
       toast.error('Complete los datos del paquete');
       return;
     }
-    // Check duplicate
-    const duplicate = packages.find(
-      p => p.id_paciente === pkgData.id_paciente && p.tipo_paquete === pkgData.tipo_paquete && p.estado === 'ACTIVO'
-    );
-    if (duplicate) {
-      toast.error('Ya existe un paquete activo de este tipo para este paciente');
-      return;
-    }
-
     setSaving(true);
     try {
       const newPkg = await packageService.create(pkgData as PackageCreateDTO);
       toast.success('Paquete creado exitosamente');
-      // Reload packages and set the new one
-      const allPkgs = await packageService.getAll().catch(() => []);
-      setPackages(allPkgs || []);
+      setPackages(current => [newPkg, ...current.filter(pkg => pkg.id !== newPkg.id)]);
       setState(s => ({
         ...s,
         createData: { ...s.createData, id_paquete: newPkg.id },
@@ -292,6 +294,7 @@ export default function CalendarPage() {
       toast.error('Este paquete ya tiene todas las sesiones consumidas');
       return;
     }
+    if (pkg?.id_profesional) updateCreateData('id_profesional', pkg.id_profesional);
     goStep('create-step3-details');
   };
 
@@ -750,9 +753,12 @@ export default function CalendarPage() {
           <Modal isOpen onClose={() => goStep('closed')} title="Crear Paquete" size="md">
             <div className="space-y-4">
               <Alert type="info" title="Paquete requerido" message={`${patient?.nombre} ${patient?.apellido} no tiene paquetes activos. Cree uno para continuar.`} />
-              <Select label="Tipo de Paquete *" value={state.newPackageData.tipo_paquete} onChange={(e) => updateNewPackage('tipo_paquete', e.target.value)} options={PACKAGE_TYPES} />
-              <Input label="Nombre del Paquete *" value={state.newPackageData.nombre} onChange={(e) => updateNewPackage('nombre', e.target.value)} placeholder="Ej: Rehabilitacion lumbar" />
-              <Input label="Cantidad de Sesiones *" type="number" min={1} max={100} value={state.newPackageData.cantidad_sesiones} onChange={(e) => updateNewPackage('cantidad_sesiones', Number(e.target.value))} />
+              <Select label="Profesional del paquete *" value={state.createData.id_profesional || ''} onChange={(e) => updateCreateData('id_profesional', Number(e.target.value))}
+                options={professionals.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} - ${p.especialidad}` }))}
+                error={state.errors.id_profesional} />
+              <Button variant="ghost" onClick={loadPackageCreationCatalogs}>Cargar catálogo de paquetes y CIE10</Button>
+              <Select label="Tipo de Paquete *" value={state.newPackageData.id_paquetes_atenciones || ''} onChange={(e) => updateNewPackage('id_paquetes_atenciones', Number(e.target.value))} options={packageCatalog.map((p) => ({ value: p.id, label: `${p.descripcion || p.nombre} (${p.cantidad_sesiones} sesiones)` }))} />
+              <Select label="CIE secundario" value={state.newPackageData.id_cie_secundario || ''} onChange={(e) => updateNewPackage('id_cie_secundario', Number(e.target.value))} options={cies.map((cie) => ({ value: cie.id, label: `${cie.codigo} - ${cie.descripcion}` }))} />
               <div className="flex justify-between pt-4 border-t border-gray-100">
                 <Button variant="ghost" onClick={() => activePkgs.length > 0 ? goStep('create-step2-package') : goStep('create-step1-patient')}>
                   <ArrowLeft className="w-4 h-4 mr-1" />Atras

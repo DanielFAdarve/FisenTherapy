@@ -17,6 +17,7 @@ import {
   appointmentService,
   packageService,
   patientService,
+  cie10Service,
   professionalService,
 } from '../../data-access/services';
 
@@ -31,6 +32,7 @@ import {
 
 import {
   appointmentSchema,
+  packageSchema,
   AppointmentFormData,
 } from '../../domain/schemas';
 
@@ -119,6 +121,14 @@ export default function AppointmentsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [packages, setPackages] = useState<FisentPackage[]>([]);
+  const [packageCatalog, setPackageCatalog] = useState<FisentPackage[]>([]);
+  const [cies, setCies] = useState<any[]>([]);
+  const [packageLoading, setPackageLoading] = useState(false);
+  const [packageError, setPackageError] = useState<string | null>(null);
+  const [newPackage, setNewPackage] = useState({
+    id_paquetes_atenciones: 0,
+    id_cie_secundario: 0,
+  });
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
 
@@ -144,20 +154,17 @@ export default function AppointmentsPage() {
     setCatalogError(null);
 
     try {
-      const [pts, pros, pkgs] = await Promise.allSettled([
+      const [pts, pros] = await Promise.allSettled([
         patientService.getAll(),
         professionalService.getAll(),
-        packageService.getAll(),
       ]);
 
       setPatients(pts.status === 'fulfilled' ? pts.value || [] : []);
       setProfessionals(pros.status === 'fulfilled' ? pros.value || [] : []);
-      setPackages(pkgs.status === 'fulfilled' ? pkgs.value || [] : []);
 
       const failedCatalogs = [
         pts.status === 'rejected' ? 'pacientes' : null,
         pros.status === 'rejected' ? 'profesionales' : null,
-        pkgs.status === 'rejected' ? 'paquetes' : null,
       ].filter(Boolean);
 
       if (failedCatalogs.length > 0) {
@@ -174,11 +181,16 @@ export default function AppointmentsPage() {
     loadCatalogs();
   }, [loadCatalogs]);
 
+
+
   const openCreate = useCallback(() => {
     setEditingAppt(null);
     setForm({ ...emptyForm, fecha: filterDate });
     setErrors({});
     setCollisionWarning(null);
+    setPackages([]);
+    setPackageError(null);
+    setNewPackage({ id_paquetes_atenciones: 0, id_cie_secundario: 0 });
     setModalOpen(true);
   }, [filterDate]);
 
@@ -244,13 +256,86 @@ export default function AppointmentsPage() {
     });
   }, []);
 
+  const loadPackageCreationCatalogs = useCallback(async () => {
+    if (packageCatalog.length > 0 && cies.length > 0) return;
+    const [catalogResult, ciesResult] = await Promise.allSettled([
+      packageService.getCatalog(undefined, 1, 50),
+      cie10Service.getAll(undefined, 1, 50),
+    ]);
+    if (catalogResult.status === 'fulfilled') setPackageCatalog(catalogResult.value || []);
+    if (ciesResult.status === 'fulfilled') setCies(ciesResult.value || []);
+  }, [cies.length, packageCatalog.length]);
+
+  const loadAvailablePackages = useCallback(async (patientId: number, quoteId?: number) => {
+    if (!patientId) {
+      setPackages([]);
+      return;
+    }
+    setPackageLoading(true);
+    setPackageError(null);
+    try {
+      const available = await packageService.getAvailableByPatient(patientId, quoteId);
+      setPackages(available || []);
+      if (!available?.some((pkg) => pkg.id === form.id_paquete)) {
+        updateField('id_paquete', null);
+      }
+    } catch (err: any) {
+      setPackages([]);
+      setPackageError(err?.message || 'No se pudieron cargar los paquetes disponibles del paciente');
+    } finally {
+      setPackageLoading(false);
+    }
+  }, [form.id_paquete, updateField]);
+
+  useEffect(() => {
+    if (!modalOpen || !form.id_paciente) return;
+    loadAvailablePackages(form.id_paciente, editingAppt?.id);
+  }, [editingAppt?.id, form.id_paciente, loadAvailablePackages, modalOpen]);
   const patientPackages = useMemo(
     () => packages.filter((p) =>
       p.id_paciente === form.id_paciente &&
-      p.estado === 'ACTIVO'
+      ((p.sesiones_disponibles ?? p.resumen_sesiones?.sesiones_disponibles ?? 0) > 0 || Boolean(p.tiene_cita_actual))
     ),
     [form.id_paciente, packages]
   );
+
+  const handleCreatePackage = useCallback(async () => {
+    if (!form.id_paciente) {
+      toast.error('Seleccione un paciente antes de crear el paquete');
+      return;
+    }
+    if (!form.id_profesional) {
+      toast.error('Seleccione un profesional para asociar el paquete');
+      return;
+    }
+    const payload = {
+      id_pacientes: form.id_paciente,
+      id_paquetes_atenciones: newPackage.id_paquetes_atenciones,
+      id_profesional: form.id_profesional,
+      id_cie_secundario: newPackage.id_cie_secundario || null,
+      id_estado_citas: 1,
+    };
+    const result = packageSchema.safeParse(payload);
+    if (!result.success) {
+      toast.error(result.error.issues[0]?.message || 'Complete los datos del paquete');
+      return;
+    }
+    setPackageLoading(true);
+    try {
+      const created = await packageService.create(result.data);
+      toast.success('Paquete creado y seleccionado');
+      setPackages((current) => [created, ...current.filter((pkg) => pkg.id !== created.id)]);
+      setForm((prev) => ({
+        ...prev,
+        id_paquete: created.id,
+        id_profesional: created.id_profesional || prev.id_profesional,
+      }));
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo crear el paquete');
+    } finally {
+      setPackageLoading(false);
+    }
+  }, [form.id_paciente, form.id_profesional, newPackage]);
 
   const handleSubmit = useCallback(async () => {
     const result = appointmentSchema.safeParse(form);
@@ -269,20 +354,14 @@ export default function AppointmentsPage() {
       return;
     }
 
-    if (result.data.id_paquete) {
-      const pkg = packages.find((p) => p.id === result.data.id_paquete);
-      if (!pkg) {
-        toast.error('Paquete no encontrado');
-        return;
-      }
-      if (pkg.estado !== 'ACTIVO') {
-        toast.error('El paquete debe estar activo');
-        return;
-      }
-      if (pkg.sesiones_realizadas >= pkg.cantidad_sesiones) {
-        toast.error('Sesiones consumidas');
-        return;
-      }
+    const pkg = packages.find((p) => p.id === result.data.id_paquete);
+    if (!pkg) {
+      toast.error('Seleccione un paquete disponible o cree uno para continuar');
+      return;
+    }
+    if (pkg.resumen_sesiones?.completo && !pkg.tiene_cita_actual) {
+      toast.error('El paquete seleccionado no tiene sesiones disponibles');
+      return;
     }
 
     setSaving(true);
@@ -405,10 +484,17 @@ export default function AppointmentsPage() {
         errors={errors}
         saving={saving}
         collisionWarning={collisionWarning}
-        catalogLoading={catalogLoading}
+        catalogLoading={catalogLoading || packageLoading}
+        packageError={packageError}
         patients={patients}
         professionals={professionals}
         patientPackages={patientPackages}
+        packageCatalog={packageCatalog}
+        cies={cies}
+        newPackage={newPackage}
+        onNewPackageChange={(field, value) => setNewPackage((prev) => ({ ...prev, [field]: value }))}
+        onLoadPackageCatalogs={loadPackageCreationCatalogs}
+        onCreatePackage={handleCreatePackage}
         onFieldChange={updateField}
         onSubmit={handleSubmit}
       />

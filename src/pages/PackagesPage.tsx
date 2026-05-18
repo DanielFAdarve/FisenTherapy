@@ -2,29 +2,23 @@
 // FISENT - PAQUETES PAGE (UI Mejorada)
 // ============================================================
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { packageService, patientService } from '../data-access/services';
-import { Package as FisentPackage, PackageCreateDTO, Patient, PackageType } from '../domain/models';
+import { packageService, patientService, professionalService, cie10Service } from '../data-access/services';
+import { Package as FisentPackage, PackageCreateDTO, Patient, Professional, Cie10 } from '../domain/models';
 import { packageSchema, PackageFormData } from '../domain/schemas';
 import {
-  Card, Button, Input, Select, Modal, Badge, TableSkeleton,
+  Card, Button, Select, Modal, Badge, TableSkeleton,
   EmptyState, PageHeader, SearchInput, ProgressBar, ConfirmDialog,
 } from '../components/ui/Components';
 import { Package, Plus, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const PACKAGE_TYPES = [
-  { value: 'REHABILITACION', label: 'Rehabilitacion' },
-  { value: 'TERAPIA', label: 'Terapia' },
-  { value: 'EVALUACION', label: 'Evaluacion' },
-  { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
-];
 
 const emptyForm: PackageFormData = {
-  id_paciente: 0,
-  tipo_paquete: 'REHABILITACION' as PackageType,
-  nombre: '',
-  cantidad_sesiones: 10,
-  fecha_inicio: new Date().toISOString().split('T')[0],
+  id_pacientes: 0,
+  id_paquetes_atenciones: 0,
+  id_profesional: 0,
+  id_cie_secundario: null,
+  id_estado_citas: 1,
 };
 
 const packageColors: Record<string, string> = {
@@ -37,6 +31,9 @@ const packageColors: Record<string, string> = {
 export default function PackagesPage() {
   const [packages, setPackages] = useState<FisentPackage[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [catalog, setCatalog] = useState<FisentPackage[]>([]);
+  const [cies, setCies] = useState<Cie10[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -48,12 +45,18 @@ export default function PackagesPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [pkgs, pts] = await Promise.all([
+      const [pkgs, pts, pros, catalogItems, ciesList] = await Promise.all([
         packageService.getAll().catch(() => []),
         patientService.getAll().catch(() => []),
+        professionalService.getAll().catch(() => []),
+        packageService.getCatalog(undefined, 1, 50).catch(() => []),
+        cie10Service.getAll(undefined, 1, 50).catch(() => []),
       ]);
       setPackages(pkgs || []);
       setPatients(pts || []);
+      setProfessionals(pros || []);
+      setCatalog(catalogItems || []);
+      setCies(ciesList || []);
     } catch (err: any) {
       toast.error(err?.message || 'Error al cargar datos');
     } finally {
@@ -84,13 +87,6 @@ export default function PackagesPage() {
         fieldErrors[String(err.path[0])] = err.message;
       });
       setErrors(fieldErrors);
-      return;
-    }
-    const duplicate = packages.find(
-      (p) => p.id_paciente === form.id_paciente && p.tipo_paquete === form.tipo_paquete && p.estado === 'ACTIVO'
-    );
-    if (duplicate) {
-      toast.error(`Ya existe un paquete activo de tipo "${form.tipo_paquete}" para este paciente`);
       return;
     }
     setSaving(true);
@@ -154,21 +150,12 @@ export default function PackagesPage() {
           filteredPackages.map((pkg) => (
             <Card key={pkg.id} className="p-0 overflow-hidden" hover>
               {/* Color bar top */}
-              <div className={`h-1.5 bg-gradient-to-r ${
-                pkg.tipo_paquete === 'REHABILITACION' ? 'from-teal-500 to-emerald-500' :
-                pkg.tipo_paquete === 'TERAPIA' ? 'from-blue-500 to-sky-500' :
-                pkg.tipo_paquete === 'EVALUACION' ? 'from-amber-500 to-orange-500' :
-                'from-purple-500 to-violet-500'
-              }`} />
+              <div className="h-1.5 bg-gradient-to-r from-teal-500 to-emerald-500" />
               <div className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="font-bold text-gray-900">{pkg.nombre}</h3>
-                    <Badge variant={
-                      pkg.tipo_paquete === 'REHABILITACION' ? 'success' :
-                      pkg.tipo_paquete === 'TERAPIA' ? 'info' :
-                      pkg.tipo_paquete === 'EVALUACION' ? 'warning' : 'purple'
-                    }>{pkg.tipo_paquete}</Badge>
+                    <Badge variant="info">{pkg.tipo_paquete_nombre || pkg.tipo_paquete}</Badge>
                   </div>
                   <Badge variant={pkg.estado === 'ACTIVO' ? 'success' : pkg.estado === 'CERRADO' ? 'neutral' : 'danger'}>
                     {pkg.estado}
@@ -182,7 +169,7 @@ export default function PackagesPage() {
                   <ProgressBar
                     value={pkg.sesiones_realizadas}
                     max={pkg.cantidad_sesiones}
-                    color={packageColors[pkg.tipo_paquete] || 'teal'}
+                    color={packageColors[String(pkg.tipo_paquete)] || 'teal'}
                   />
                   <p className="text-xs text-gray-400">Inicio: {pkg.fecha_inicio?.split('T')[0]}</p>
                 </div>
@@ -203,29 +190,32 @@ export default function PackagesPage() {
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <Select
             label="Paciente *"
-            value={form.id_paciente || ''}
-            onChange={(e) => updateField('id_paciente', Number(e.target.value))}
+            value={form.id_pacientes || ''}
+            onChange={(e) => updateField('id_pacientes', Number(e.target.value))}
             options={patients.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} (${p.num_doc})` }))}
-            error={errors.id_paciente}
+            error={errors.id_pacientes}
           />
           <Select
-            label="Tipo de Paquete *"
-            value={form.tipo_paquete}
-            onChange={(e) => updateField('tipo_paquete', e.target.value)}
-            options={PACKAGE_TYPES}
-            error={errors.tipo_paquete}
+            label="Tipo de paquete *"
+            value={form.id_paquetes_atenciones || ''}
+            onChange={(e) => updateField('id_paquetes_atenciones', Number(e.target.value))}
+            options={catalog.map((pkg) => ({ value: pkg.id, label: `${pkg.descripcion || pkg.nombre} (${pkg.cantidad_sesiones} sesiones)` }))}
+            error={errors.id_paquetes_atenciones}
           />
-          <Input
-            label="Nombre del Paquete *"
-            value={form.nombre}
-            onChange={(e) => updateField('nombre', e.target.value)}
-            error={errors.nombre}
-            placeholder="Ej: Rehabilitacion lumbar"
+          <Select
+            label="Profesional *"
+            value={form.id_profesional || ''}
+            onChange={(e) => updateField('id_profesional', Number(e.target.value))}
+            options={professionals.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} - ${p.especialidad}` }))}
+            error={errors.id_profesional}
           />
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Cantidad Sesiones *" type="number" min={1} max={100} value={form.cantidad_sesiones} onChange={(e) => updateField('cantidad_sesiones', Number(e.target.value))} error={errors.cantidad_sesiones} />
-            <Input label="Fecha Inicio *" type="date" value={form.fecha_inicio} onChange={(e) => updateField('fecha_inicio', e.target.value)} error={errors.fecha_inicio} />
-          </div>
+          <Select
+            label="CIE secundario"
+            value={form.id_cie_secundario || ''}
+            onChange={(e) => updateField('id_cie_secundario', e.target.value ? Number(e.target.value) : null)}
+            options={cies.map((cie) => ({ value: cie.id, label: `${cie.codigo} - ${cie.descripcion}` }))}
+            error={errors.id_cie_secundario}
+          />
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" isLoading={saving}>Crear Paquete</Button>
