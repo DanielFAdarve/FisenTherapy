@@ -2,6 +2,7 @@
 // FISENT - CALENDARIO PAGE (Flujo completo por modales)
 // ============================================================
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   appointmentService, professionalService,
   packageService, paymentService, cie10Service,
@@ -19,7 +20,7 @@ import {
 import { PatientSearchField } from '../components/PatientSearchField';
 import {
   ChevronLeft, ChevronRight, Calendar, Plus, XCircle, Edit2,
-  CreditCard, Package, CheckCircle, ArrowRight, ArrowLeft, AlertTriangle, DollarSign,
+  CreditCard, Package, CheckCircle, ArrowRight, ArrowLeft, AlertTriangle, DollarSign, FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -93,6 +94,7 @@ const emptyPayment = { valor: 0, metodo_pago: 'EFECTIVO' as PaymentMethod, obser
 // COMPONENT
 // ============================================================
 export default function CalendarPage() {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | ''>('');
@@ -162,6 +164,43 @@ export default function CalendarPage() {
     Number(appointment.id_paquete ?? appointment.id_paquetes ?? appointment.paquete?.id ?? appointment.package?.id ?? 0) || null;
 
   const getAppointmentPackage = (appointment: Appointment) => appointment.package ?? appointment.paquete ?? null;
+
+
+  const buildPackageFromAppointment = (appointment: Appointment): FisentPackage | null => {
+    const packageId = getAppointmentPackageId(appointment);
+    if (!packageId) return null;
+    const source = getAppointmentPackage(appointment);
+    const total = Number(appointment.sesiones_totales_paquete ?? source?.cantidad_sesiones ?? appointment.numero_sesion ?? 1);
+    const used = Number(source?.sesiones_realizadas ?? appointment.numero_sesion ?? 0);
+    const name = appointment.tipo_paquete || source?.nombre || source?.attentionPackage?.descripcion || `Paquete #${packageId}`;
+    return {
+      ...(source ?? {}),
+      id: packageId,
+      id_paquete: packageId,
+      id_paciente: source?.id_paciente || appointment.id_paciente,
+      id_pacientes: source?.id_pacientes || appointment.id_paciente,
+      id_profesional: source?.id_profesional ?? appointment.id_profesional,
+      tipo_paquete: source?.tipo_paquete || name,
+      nombre: name,
+      cantidad_sesiones: total,
+      sesiones_realizadas: used,
+      sesiones_disponibles: Math.max(total - used, 0),
+      estado: source?.estado || 'ACTIVO',
+      fecha_inicio: source?.fecha_inicio || '',
+      created_at: source?.created_at || '',
+      updated_at: source?.updated_at || '',
+      tiene_cita_actual: true,
+    } as FisentPackage;
+  };
+
+  const getAppointmentPackageName = (appointment: Appointment) => (
+    appointment.tipo_paquete ||
+    appointment.package?.nombre ||
+    appointment.paquete?.nombre ||
+    appointment.package?.attentionPackage?.descripcion ||
+    appointment.paquete?.attentionPackage?.descripcion ||
+    (getAppointmentPackageId(appointment) ? `Paquete #${getAppointmentPackageId(appointment)}` : '')
+  );
 
   const getProfessionalColor = (professionalId?: number) =>
     PROFESSIONAL_COLORS[Math.abs(Number(professionalId ?? 0)) % PROFESSIONAL_COLORS.length];
@@ -447,7 +486,7 @@ export default function CalendarPage() {
     if (!state.selectedAppointment) return;
     const apt = state.selectedAppointment;
     const selectedPackageId = getAppointmentPackageId(apt);
-    const currentPackage = getAppointmentPackage(apt);
+    const currentPackage = getAppointmentPackage(apt) ?? buildPackageFromAppointment(apt);
 
     if (currentPackage && selectedPackageId) {
       setPackages((current) => [
@@ -798,11 +837,11 @@ export default function CalendarPage() {
                     <p className="text-sm font-bold text-teal-700 mt-0.5">#{apt.numero_sesion}</p>
                   </div>
                 )}
-                {apt.tipo_paquete && (
+                {getAppointmentPackageName(apt) && (
                   <div className="bg-teal-50 rounded-xl p-3">
                     <p className="text-xs font-semibold text-teal-500 uppercase tracking-wider">Paquete</p>
-                    <p className="text-sm font-bold text-teal-700 mt-0.5 truncate">{apt.tipo_paquete}</p>
-                    <ProgressBar value={apt.numero_sesion|| 1} max={apt.sesiones_totales_paquete || 1} color="teal" />
+                    <p className="text-sm font-bold text-teal-700 mt-0.5 truncate">{getAppointmentPackageName(apt)}</p>
+                    <ProgressBar value={apt.numero_sesion || 1} max={apt.sesiones_totales_paquete || apt.package?.cantidad_sesiones || apt.paquete?.cantidad_sesiones || 1} color="teal" />
                   </div>
                 )}
               </div>
@@ -816,7 +855,10 @@ export default function CalendarPage() {
 
               {/* Action Buttons */}
               {apt.estado !== 'CANCELADA' && apt.estado !== 'COMPLETADA' && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                  <Button variant="outline" onClick={() => navigate(`/history?quote=${apt.id}`)} className="w-full">
+                    <FileText className="w-4 h-4 mr-2" />{apt.tiene_historia ? 'Ver historia' : 'Crear historia'}
+                  </Button>
                   <Button variant="outline" onClick={startEdit} className="w-full">
                     <Edit2 className="w-4 h-4 mr-2" />Editar
                   </Button>
@@ -1007,6 +1049,11 @@ export default function CalendarPage() {
           <Modal isOpen onClose={() => goStep('view-appointment')} title="Editar Cita" size="lg">
             <div className="space-y-4">
               {state.collisionWarning && <Alert type="warning" title="Conflicto de agenda" message={state.collisionWarning} />}
+              <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-3 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">Paquete seleccionado</p>
+                <p className="font-bold text-teal-800">{pkg?.nombre || (apt ? getAppointmentPackageName(apt) : 'Paquete actual')}</p>
+                {pkg && <p className="text-xs text-teal-700">{pkg.sesiones_realizadas}/{pkg.cantidad_sesiones} sesiones usadas · {pkg.sesiones_disponibles ?? pkg.resumen_sesiones?.sesiones_disponibles ?? 0} disponibles</p>}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Select label="Profesional *" value={state.createData.id_profesional || ''} onChange={(e) => updateCreateData('id_profesional', Number(e.target.value))}
                   options={professionals.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} - ${p.especialidad}` }))}

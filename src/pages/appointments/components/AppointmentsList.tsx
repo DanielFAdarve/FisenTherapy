@@ -7,7 +7,9 @@ interface Props {
   appointments: Appointment[];
   onEdit: (appointment: Appointment) => void;
   onCancel: (id: number) => void;
+  onOpenHistory: (appointment: Appointment) => void;
 }
+
 
 const avatarColors = ['teal', 'blue', 'purple', 'amber', 'emerald', 'rose'] as const;
 
@@ -24,7 +26,15 @@ const professionalName = (appointment: Appointment) =>
     .join(' ') ||
   'Profesional sin asignar';
 
-export function AppointmentsList({ appointments, onEdit, onCancel }: Props) {
+const packageName = (appointment: Appointment) =>
+  appointment.tipo_paquete ||
+  appointment.package?.nombre ||
+  appointment.paquete?.nombre ||
+  appointment.package?.attentionPackage?.descripcion ||
+  appointment.paquete?.attentionPackage?.descripcion ||
+  (appointment.id_paquete || appointment.id_paquetes ? `Paquete #${appointment.id_paquete ?? appointment.id_paquetes}` : 'Paquete no identificado');
+
+export function AppointmentsList({ appointments, onEdit, onCancel, onOpenHistory }: Props) {
   return (
     <div className="divide-y divide-gray-50">
       {appointments.map((appointment, index) => {
@@ -74,6 +84,9 @@ export function AppointmentsList({ appointments, onEdit, onCancel }: Props) {
                         Sesión #{appointment.numero_sesion}
                       </span>
                     )}
+                    <span className="font-semibold text-emerald-600">
+                      {packageName(appointment)}
+                    </span>
                   </div>
 
                   {appointment.observaciones && (
@@ -98,6 +111,15 @@ export function AppointmentsList({ appointments, onEdit, onCancel }: Props) {
                     <CreditCard className="h-3.5 w-3.5" />
                     {appointment.pagado ? 'OK' : 'Por pagar'}
                   </span>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenHistory(appointment)}
+                    className="rounded-xl p-2 text-teal-600 hover:bg-teal-50"
+                    title={appointment.tiene_historia ? 'Ver/editar historia clínica' : 'Crear historia clínica'}
+                  >
+                    <FileText className="h-4 w-4" />
+                  </button>
 
                   {!isClosed && (
                     <>
