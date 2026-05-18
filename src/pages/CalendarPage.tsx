@@ -685,11 +685,11 @@ export default function CalendarPage() {
                     <p className="text-sm font-bold text-teal-700 mt-0.5">#{apt.numero_sesion}</p>
                   </div>
                 )}
-                {apt.paquete && (
+                {apt.tipo_paquete && (
                   <div className="bg-teal-50 rounded-xl p-3">
                     <p className="text-xs font-semibold text-teal-500 uppercase tracking-wider">Paquete</p>
-                    <p className="text-sm font-bold text-teal-700 mt-0.5 truncate">{apt.paquete.nombre}</p>
-                    <ProgressBar value={apt.paquete.sesiones_realizadas} max={apt.paquete.cantidad_sesiones} color="teal" />
+                    <p className="text-sm font-bold text-teal-700 mt-0.5 truncate">{apt.tipo_paquete}</p>
+                    <ProgressBar value={apt.numero_sesion|| 1} max={apt.sesiones_totales_paquete || 1} color="teal" />
                   </div>
                 )}
               </div>
@@ -739,7 +739,7 @@ export default function CalendarPage() {
                 options={patients.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} (${p.num_doc})` }))}
                 error={state.errors.id_paciente}
               />
-              {state.createData.id_paciente > 0 && (
+              {/* {state.createData.id_paciente > 0 && (
                 <div className="bg-gray-50 rounded-xl p-3 text-sm">
                   <p className="font-semibold text-gray-700 mb-1">Paquetes activos:</p>
                   {patientHasActivePackages(state.createData.id_paciente).length > 0 ? (
@@ -755,7 +755,7 @@ export default function CalendarPage() {
                     </p>
                   )}
                 </div>
-              )}
+              )} */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                 <Button variant="secondary" onClick={() => goStep('closed')}>Cancelar</Button>
                 <Button onClick={handlePatientSelected}>Siguiente <ArrowRight className="w-4 h-4 ml-1" /></Button>
@@ -874,6 +874,7 @@ export default function CalendarPage() {
                   <div><p className="text-xs text-gray-400 font-semibold">Fecha</p><p className="font-bold text-gray-800">{state.createData.fecha}</p></div>
                   <div><p className="text-xs text-gray-400 font-semibold">Horario</p><p className="font-bold text-gray-800">{state.createData.horario_inicio} - {state.createData.horario_fin}</p></div>
                   <div className="col-span-2"><p className="text-xs text-gray-400 font-semibold">Paquete</p><p className="font-bold text-teal-700">{pkg?.nombre} (Sesion #{(pkg?.sesiones_realizadas || 0) + 1})</p></div>
+                  
                 </div>
               </div>
               <div className="flex justify-between pt-4 border-t border-gray-100">

@@ -285,6 +285,8 @@ export interface Appointment {
   status?: { id: number; descripcion?: string; nombre?: string; estado?: string };
   HistoryQuotes?: ClinicalHistory[];
   agendamiento?: AppointmentSchedulingSummary;
+  tipo_paquete?: string;
+  sesiones_totales_paquete?: number;
 }
 
 
@@ -296,7 +298,7 @@ export interface AppointmentCreateDTO {
   horario_inicio: string;
   horario_fin: string;
   observaciones?: string;
-  id_estado_citas?: number;
+  id_estado_citas?: number | 1;
   recordatorio?: boolean;
 }
 

@@ -438,6 +438,7 @@ function normalizeAppointmentPayload(data: Partial<AppointmentCreateDTO>) {
   delete payload.fecha;
   delete payload.id_paquete;
   delete payload.observaciones;
+  if (payload.id_estado_citas === undefined) payload.id_estado_citas = 1;
   return payload;
 }
 
