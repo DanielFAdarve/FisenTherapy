@@ -172,6 +172,23 @@ export interface PackageSessionSummary {
   completo: boolean;
 }
 
+export interface AppointmentSchedulingSummary {
+  id_cita: number;
+  id_paquete: number;
+  id_paciente: number;
+  id_profesional: number;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  numero_sesion: number;
+  sesiones_totales_paquete: number;
+  sesiones_usadas_paquete: number;
+  sesiones_disponibles_paquete: number;
+  paquete_completo: boolean;
+  tiene_historia: boolean;
+  id_historial: number | null;
+}
+
 export interface PackageAttentionCatalog {
   id: number;
   descripcion: string;
@@ -263,36 +280,13 @@ export interface Appointment {
   paciente?: string;
   profesional?: string;
   paquete?: Package;
+  package?: Package;
+  professional?: Professional;
+  status?: { id: number; descripcion?: string; nombre?: string; estado?: string };
+  HistoryQuotes?: ClinicalHistory[];
+  agendamiento?: AppointmentSchedulingSummary;
 }
 
-
-// export interface Appointment {
-//   id: number;
-//   id_paciente: number;
-//   id_profesional: number;
-//   id_paquete?: number | null;
-//   id_paquetes?: number | null;
-//   id_estado_citas?: number | null;
-//   fecha: string;
-//   horario_inicio: string;
-//   horario_fin: string;
-//   hora_inicio?: string;
-//   hora_fin?: string;
-//   numero_sesion?: number | null;
-//   estado: AppointmentStatus;
-//   pagado?: boolean;
-//   motivo?: string;
-//   observaciones: string;
-//   created_at: string;
-//   updated_at: string;
-//   paciente_nombre?: string;
-//   num_doc_paciente?: string;
-//   profesional_nombre?: string;
-//   apellido_profesional?: string;
-//   paciente?: Patient;
-//   profesional?: Professional;
-//   paquete?: Package;
-// }
 
 export interface AppointmentCreateDTO {
   id_paciente: number;
@@ -302,6 +296,8 @@ export interface AppointmentCreateDTO {
   horario_inicio: string;
   horario_fin: string;
   observaciones?: string;
+  id_estado_citas?: number;
+  recordatorio?: boolean;
 }
 
 export interface AppointmentUpdateDTO extends Partial<AppointmentCreateDTO> {

@@ -102,7 +102,14 @@ export const packageService = {
   getAvailableByPatient: async (idPaciente: number, quoteId?: number) => {
     const query = quoteId ? `?quoteId=${encodeURIComponent(String(quoteId))}` : '';
     const res = await api.get<BackendResponse<any[]>>(`/packages/get-available-by-patient/${idPaciente}${query}`);
-    return (res.data.response ?? []).map(normalizePackage);
+    return (res.data.response ?? []).map((item) => {
+      const normalized = normalizePackage(item);
+      return {
+        ...normalized,
+        id_paciente: normalized.id_paciente || idPaciente,
+        id_pacientes: normalized.id_pacientes || idPaciente,
+      };
+    });
   },
   getById: async (id: number) => {
     const res = await api.get<BackendResponse<any>>(`/packages/get/${id}`);
@@ -381,17 +388,19 @@ function normalizeAppointment(data: any): Appointment {
   const profesionalNombre = typeof data?.profesional === 'string'
     ? [data.profesional, data?.apellido_profesional].filter(Boolean).join(' ')
     : [data?.profesional?.nombre, data?.profesional?.apellido].filter(Boolean).join(' ');
-  const idPaquete = data?.id_paquete ?? data?.id_paquetes ?? data?.package?.id ?? null;
+  const idPaquete = data?.id_paquete ?? data?.id_paquetes ?? data?.package?.id ?? data?.paquete?.id ?? null;
   const horarioInicio = data?.horario_inicio ?? data?.hora_inicio ?? '';
   const horarioFin = data?.horario_fin ?? data?.hora_fin ?? '';
   const observaciones = data?.observaciones ?? data?.motivo ?? '';
 
   return {
     ...data,
-    id_paciente: Number(data?.id_paciente ?? data?.id_pacientes ?? data?.package?.id_pacientes ?? data?.package?.patient?.id ?? 0),
-    id_profesional: Number(data?.id_profesional ?? data?.professional?.id ?? data?.package?.id_profesional ?? 0),
+    id_paciente: Number(data?.id_paciente ?? data?.id_pacientes ?? data?.package?.id_pacientes ?? data?.package?.patient?.id ?? data?.paquete?.id_pacientes ?? data?.paquete?.patient?.id ?? 0),
+    id_profesional: Number(data?.id_profesional ?? data?.professional?.id ?? data?.profesional?.id ?? data?.package?.id_profesional ?? data?.paquete?.id_profesional ?? 0),
     id_paquete: idPaquete,
     id_paquetes: data?.id_paquetes ?? idPaquete,
+    paquete: data?.paquete ? normalizePackage(data.paquete) : data?.package ? normalizePackage(data.package) : data?.paquete,
+    package: data?.package ? normalizePackage(data.package) : data?.paquete ? normalizePackage(data.paquete) : data?.package,
     fecha: data?.fecha ?? data?.fecha_agendamiento ?? '',
     horario_inicio: horarioInicio,
     horario_fin: horarioFin,
@@ -401,10 +410,14 @@ function normalizeAppointment(data: any): Appointment {
     observaciones,
     estado: String(data?.estado ?? 'PROGRAMADA').toUpperCase(),
     pagado: Boolean(data?.pagado),
+    paciente: pacienteNombre,
+    profesional: profesionalNombre,
     paciente_nombre: data?.paciente_nombre ?? pacienteNombre,
     profesional_nombre: data?.profesional_nombre ?? profesionalNombre,
     created_at: data?.created_at ?? '',
     updated_at: data?.updated_at ?? '',
+    agendamiento: data?.agendamiento,
+    HistoryQuotes: data?.HistoryQuotes ?? [],
   } as Appointment;
 }
 

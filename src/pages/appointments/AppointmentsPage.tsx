@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -139,6 +140,7 @@ export default function AppointmentsPage() {
   const [saving, setSaving] = useState(false);
   const [collisionWarning, setCollisionWarning] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<number | null>(null);
+  const availabilityCache = useRef(new Map<string, Appointment[]>());
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -210,37 +212,47 @@ export default function AppointmentsPage() {
     setModalOpen(true);
   }, []);
 
-  const checkCollision = useCallback(async () => {
+  const getAvailability = useCallback(async (professionalId: number, date: string) => {
+    const cacheKey = `${professionalId}:${date}`;
+    const cached = availabilityCache.current.get(cacheKey);
+    if (cached) return cached;
+
+    const availableAppointments = await appointmentService.checkAvailability(professionalId, date);
+    availabilityCache.current.set(cacheKey, availableAppointments);
+    return availableAppointments;
+  }, []);
+
+  useEffect(() => {
     if (!modalOpen || !form.id_profesional || !form.fecha || !form.horario_inicio || !form.horario_fin) {
       setCollisionWarning(null);
       return;
     }
 
-    try {
-      const result = await appointmentService.checkCollision(
-        form.fecha,
-        form.id_profesional,
-        form.horario_inicio,
-        form.horario_fin
-      );
+    let isCurrent = true;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const dayAppointments = await getAvailability(form.id_profesional, form.fecha);
+        if (!isCurrent) return;
+        setCollisionWarning(
+          hasScheduleCollision(dayAppointments, form, editingAppt?.id)
+            ? 'El profesional ya tiene citas en ese horario'
+            : null
+        );
+      } catch {
+        if (!isCurrent) return;
+        setCollisionWarning(
+          hasScheduleCollision(appointments, form, editingAppt?.id)
+            ? 'El profesional ya tiene citas en ese horario'
+            : null
+        );
+      }
+    }, 350);
 
-      setCollisionWarning(
-        result.collision
-          ? 'El profesional ya tiene citas en ese horario'
-          : null
-      );
-    } catch {
-      setCollisionWarning(
-        hasScheduleCollision(appointments, form, editingAppt?.id)
-          ? 'El profesional ya tiene citas en ese horario'
-          : null
-      );
-    }
-  }, [appointments, editingAppt?.id, form, modalOpen]);
-
-  useEffect(() => {
-    checkCollision();
-  }, [checkCollision]);
+    return () => {
+      isCurrent = false;
+      window.clearTimeout(timeout);
+    };
+  }, [appointments, editingAppt?.id, form.fecha, form.horario_fin, form.horario_inicio, form.id_profesional, getAvailability, modalOpen]);
 
   const updateField = useCallback((field: string, value: any) => {
     setForm((prev: any) => ({
@@ -276,16 +288,17 @@ export default function AppointmentsPage() {
     try {
       const available = await packageService.getAvailableByPatient(patientId, quoteId);
       setPackages(available || []);
-      if (!available?.some((pkg) => pkg.id === form.id_paquete)) {
-        updateField('id_paquete', null);
-      }
+      setForm((prev) => {
+        if (!prev.id_paquete || available?.some((pkg) => pkg.id === prev.id_paquete)) return prev;
+        return { ...prev, id_paquete: null };
+      });
     } catch (err: any) {
       setPackages([]);
       setPackageError(err?.message || 'No se pudieron cargar los paquetes disponibles del paciente');
     } finally {
       setPackageLoading(false);
     }
-  }, [form.id_paquete, updateField]);
+  }, []);
 
   useEffect(() => {
     if (!modalOpen || !form.id_paciente) return;
@@ -331,11 +344,23 @@ export default function AppointmentsPage() {
         id_profesional: created.id_profesional || prev.id_profesional,
       }));
     } catch (err: any) {
-      toast.error(err?.message || 'No se pudo crear el paquete');
+      const fallbackPackages = await packageService.getAvailableByPatient(form.id_paciente, editingAppt?.id).catch(() => []);
+      if (fallbackPackages.length > 0) {
+        const activePackage = fallbackPackages[0];
+        setPackages(fallbackPackages);
+        setForm((prev) => ({
+          ...prev,
+          id_paquete: activePackage.id,
+          id_profesional: activePackage.id_profesional || prev.id_profesional,
+        }));
+        toast.success('Se seleccionó un paquete activo existente para continuar');
+      } else {
+        toast.error(err?.message || 'No se pudo crear el paquete');
+      }
     } finally {
       setPackageLoading(false);
     }
-  }, [form.id_paciente, form.id_profesional, newPackage]);
+  }, [editingAppt?.id, form.id_paciente, form.id_profesional, newPackage]);
 
   const handleSubmit = useCallback(async () => {
     const result = appointmentSchema.safeParse(form);
@@ -349,9 +374,17 @@ export default function AppointmentsPage() {
       return;
     }
 
-    if (hasScheduleCollision(appointments, result.data, editingAppt?.id)) {
-      toast.error('Conflicto de agenda: el profesional ya tiene una cita en ese horario');
-      return;
+    try {
+      const dayAppointments = await getAvailability(result.data.id_profesional, result.data.fecha);
+      if (hasScheduleCollision(dayAppointments, result.data, editingAppt?.id)) {
+        toast.error('Conflicto de agenda: el profesional ya tiene una cita en ese horario');
+        return;
+      }
+    } catch {
+      if (hasScheduleCollision(appointments, result.data, editingAppt?.id)) {
+        toast.error('Conflicto de agenda: el profesional ya tiene una cita en ese horario');
+        return;
+      }
     }
 
     const pkg = packages.find((p) => p.id === result.data.id_paquete);
@@ -378,6 +411,7 @@ export default function AppointmentsPage() {
         toast.success('Cita agendada exitosamente');
       }
 
+      availabilityCache.current.clear();
       setModalOpen(false);
       loadAppointments();
     } catch (err: any) {
@@ -385,11 +419,12 @@ export default function AppointmentsPage() {
     } finally {
       setSaving(false);
     }
-  }, [appointments, editingAppt, form, loadAppointments, packages]);
+  }, [appointments, editingAppt, form, getAvailability, loadAppointments, packages]);
 
   const handleCancel = useCallback(async (id: number) => {
     try {
       await appointmentService.cancel(id);
+      availabilityCache.current.clear();
       toast.success('Cita cancelada');
       loadAppointments();
     } catch (err: any) {

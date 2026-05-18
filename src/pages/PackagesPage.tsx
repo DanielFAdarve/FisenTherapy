@@ -35,6 +35,7 @@ export default function PackagesPage() {
   const [catalog, setCatalog] = useState<FisentPackage[]>([]);
   const [cies, setCies] = useState<Cie10[]>([]);
   const [loading, setLoading] = useState(true);
+  const [supportLoading, setSupportLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<PackageFormData>(emptyForm);
@@ -45,18 +46,8 @@ export default function PackagesPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [pkgs, pts, pros, catalogItems, ciesList] = await Promise.all([
-        packageService.getAll().catch(() => []),
-        patientService.getAll().catch(() => []),
-        professionalService.getAll().catch(() => []),
-        packageService.getCatalog(undefined, 1, 50).catch(() => []),
-        cie10Service.getAll(undefined, 1, 50).catch(() => []),
-      ]);
+      const pkgs = await packageService.getAll().catch(() => []);
       setPackages(pkgs || []);
-      setPatients(pts || []);
-      setProfessionals(pros || []);
-      setCatalog(catalogItems || []);
-      setCies(ciesList || []);
     } catch (err: any) {
       toast.error(err?.message || 'Error al cargar datos');
     } finally {
@@ -72,10 +63,32 @@ export default function PackagesPage() {
     p.paciente?.num_doc?.includes(search)
   );
 
+  const loadCreationSupport = useCallback(async () => {
+    if (patients.length > 0 && professionals.length > 0 && catalog.length > 0 && cies.length > 0) return;
+    setSupportLoading(true);
+    try {
+      const [pts, pros, catalogItems, ciesList] = await Promise.allSettled([
+        patients.length > 0 ? Promise.resolve(patients) : patientService.getAll(),
+        professionals.length > 0 ? Promise.resolve(professionals) : professionalService.getAll(),
+        catalog.length > 0 ? Promise.resolve(catalog) : packageService.getCatalog(undefined, 1, 50),
+        cies.length > 0 ? Promise.resolve(cies) : cie10Service.getAll(undefined, 1, 50),
+      ]);
+      if (pts.status === 'fulfilled') setPatients(pts.value || []);
+      if (pros.status === 'fulfilled') setProfessionals(pros.value || []);
+      if (catalogItems.status === 'fulfilled') setCatalog(catalogItems.value || []);
+      if (ciesList.status === 'fulfilled') setCies(ciesList.value || []);
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al cargar datos de apoyo');
+    } finally {
+      setSupportLoading(false);
+    }
+  }, [catalog, cies, patients, professionals]);
+
   const openCreate = () => {
     setForm(emptyForm);
     setErrors({});
     setModalOpen(true);
+    loadCreationSupport();
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -91,10 +104,10 @@ export default function PackagesPage() {
     }
     setSaving(true);
     try {
-      await packageService.create(result.data as PackageCreateDTO);
+      const created = await packageService.create(result.data as PackageCreateDTO);
       toast.success('Paquete creado exitosamente');
+      setPackages((current) => [created, ...current.filter((pkg) => pkg.id !== created.id)]);
       setModalOpen(false);
-      loadData();
     } catch (err: any) {
       toast.error(err?.message || 'Error al crear paquete');
     } finally {
@@ -104,9 +117,10 @@ export default function PackagesPage() {
 
   const handleClose = async (id: number) => {
     try {
-      await packageService.close(id);
+      const closed = await packageService.close(id);
       toast.success('Paquete cerrado correctamente');
-      loadData();
+      setPackages((current) => current.map((pkg) => (pkg.id === id ? closed : pkg)));
+      setConfirmClose(null);
     } catch (err: any) {
       toast.error(err?.message || 'Error al cerrar paquete');
     }
@@ -218,7 +232,7 @@ export default function PackagesPage() {
           />
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button type="submit" isLoading={saving}>Crear Paquete</Button>
+            <Button type="submit" isLoading={saving || supportLoading}>Crear Paquete</Button>
           </div>
         </form>
       </Modal>
