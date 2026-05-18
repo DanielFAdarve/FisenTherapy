@@ -2,12 +2,13 @@
 // FISENT - HISTORIA CLINICA PAGE (UI Mejorada)
 // ============================================================
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { historyService, appointmentService, cie10Service, patientService } from '../data-access/services';
+import { historyService, appointmentService, cie10Service } from '../data-access/services';
 import { ClinicalHistory, ClinicalHistoryCreateDTO, Appointment, Cie10, Patient } from '../domain/models';
 import { clinicalHistorySchema, ClinicalHistoryFormData } from '../domain/schemas';
 import {
   Card, Button, Select, Textarea, Modal, Badge, TableSkeleton, EmptyState, PageHeader,
 } from '../components/ui/Components';
+import { PatientSearchField } from '../components/PatientSearchField';
 import { FileText, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -34,14 +35,12 @@ export default function HistoryPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [appts, cies, pts] = await Promise.all([
-        appointmentService.getAll().catch(() => []),
-        cie10Service.getAll().catch(() => []),
-        patientService.getAll().catch(() => []),
+      const [appts, cies] = await Promise.all([
+        selectedPatient ? appointmentService.getAll(undefined, undefined, Number(selectedPatient)).catch(() => []) : Promise.resolve([]),
+        cie10Service.getAll(undefined, 1, 50).catch(() => []),
       ]);
       setAppointments(appts.filter((a: Appointment) => a.estado === 'COMPLETADA' || a.estado === 'CONFIRMADA'));
       setCie10List(cies || []);
-      setPatients(pts || []);
       if (selectedPatient) {
         const hists = await historyService.getByPatient(Number(selectedPatient)).catch(() => []);
         setHistories(hists || []);
@@ -86,6 +85,16 @@ export default function HistoryPage() {
     if (errors[field]) setErrors((prev: any) => { const n = { ...prev }; delete n[field]; return n; });
   };
 
+  const mergePatients = useCallback((foundPatients: Patient[]) => {
+    setPatients((current) => {
+      const merged = [...current];
+      foundPatients.forEach((patient) => {
+        if (!merged.some((item) => item.id === patient.id)) merged.push(patient);
+      });
+      return merged;
+    });
+  }, []);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -97,11 +106,15 @@ export default function HistoryPage() {
 
       <Card>
         <div className="p-4">
-          <Select
+          <PatientSearchField
             label="Filtrar por Paciente"
             value={selectedPatient}
-            onChange={(e) => setSelectedPatient(e.target.value ? Number(e.target.value) : '')}
-            options={patients.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} (${p.num_doc})` }))}
+            initialPatient={patients.find((patient) => patient.id === selectedPatient) ?? null}
+            onChange={(patientId, patient) => {
+              setSelectedPatient(patientId ? Number(patientId) : '');
+              if (patient) mergePatients([patient]);
+            }}
+            onResults={mergePatients}
             className="max-w-md"
           />
         </div>

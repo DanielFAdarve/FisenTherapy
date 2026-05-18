@@ -1,4 +1,5 @@
 import { Alert, Button, Input, Modal, Select, Textarea } from '../../../components/ui/Components';
+import { PatientSearchField } from '../../../components/PatientSearchField';
 import { Appointment, Package as FisentPackage, Patient, Professional } from '../../../domain/models';
 import { AppointmentFormData } from '../../../domain/schemas';
 
@@ -22,6 +23,7 @@ interface Props {
   onLoadPackageCatalogs: () => void;
   onCreatePackage: () => void;
   onFieldChange: (field: string, value: any) => void;
+  onPatientsFound: (patients: Patient[]) => void;
   onSubmit: () => void;
 }
 
@@ -45,6 +47,7 @@ export function AppointmentFormModal({
   onLoadPackageCatalogs,
   onCreatePackage,
   onFieldChange,
+  onPatientsFound,
   onSubmit,
 }: Props) {
   return (
@@ -79,16 +82,12 @@ export function AppointmentFormModal({
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Select
+          <PatientSearchField
             label="Paciente *"
             value={form.id_paciente || ''}
-            onChange={(event) => onFieldChange('id_paciente', Number(event.target.value))}
-            options={patients
-              .filter((patient) => patient.estado)
-              .map((patient) => ({
-                value: patient.id,
-                label: `${patient.nombre} ${patient.apellido}`,
-              }))}
+            initialPatient={patients.find((patient) => patient.id === form.id_paciente) ?? null}
+            onChange={(patientId) => onFieldChange('id_paciente', patientId ? Number(patientId) : 0)}
+            onResults={onPatientsFound}
             error={errors.id_paciente}
           />
 

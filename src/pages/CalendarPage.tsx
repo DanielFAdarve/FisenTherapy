@@ -3,7 +3,7 @@
 // ============================================================
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  appointmentService, patientService, professionalService,
+  appointmentService, professionalService,
   packageService, paymentService, cie10Service,
 } from '../data-access/services';
 import {
@@ -16,6 +16,7 @@ import {
   Card, Button, Input, Select, Textarea, Modal, Badge, Alert,
   Avatar, ProgressBar,
 } from '../components/ui/Components';
+import { PatientSearchField } from '../components/PatientSearchField';
 import {
   ChevronLeft, ChevronRight, Calendar, Plus, XCircle, Edit2,
   CreditCard, Package, CheckCircle, ArrowRight, ArrowLeft, AlertTriangle, DollarSign,
@@ -120,17 +121,15 @@ export default function CalendarPage() {
           ? format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 6), 'yyyy-MM-dd')
           : format(currentDate, 'yyyy-MM-dd');
 
-      const [apptsResult, pts, pros] = await Promise.all([
+      const [apptsResult, pros] = await Promise.all([
         appointmentService.getPaginated({
           page: 1,
           limit: 200,
           filters: { fechaInicio: startDate, fechaFin: endDate },
         }).catch(() => ({ data: [] as Appointment[] })),
-        patientService.getAll().catch(() => []),
         professionalService.getAll().catch(() => []),
       ]);
       setAppointments(apptsResult.data || []);
-      setPatients(pts || []);
       setProfessionals(pros || []);
     } catch (err: any) {
       toast.error(err?.message || 'Error al cargar datos');
@@ -191,10 +190,24 @@ export default function CalendarPage() {
   const updateCreateData = (field: string, value: any) => {
     setState(s => ({
       ...s,
-      createData: { ...s.createData, [field]: value },
+      createData: {
+        ...s.createData,
+        [field]: value,
+        ...(field === 'id_paciente' && s.createData.id_paciente !== value ? { id_paquete: null } : {}),
+      },
       errors: { ...s.errors, [field]: undefined },
     }));
   };
+
+  const mergePatients = useCallback((foundPatients: Patient[]) => {
+    setPatients((current) => {
+      const merged = [...current];
+      foundPatients.forEach((patient) => {
+        if (!merged.some((item) => item.id === patient.id)) merged.push(patient);
+      });
+      return merged;
+    });
+  }, []);
 
   const updateNewPackage = (field: string, value: any) => {
     setState(s => ({ ...s, newPackageData: { ...s.newPackageData, [field]: value } }));
@@ -732,11 +745,12 @@ export default function CalendarPage() {
                 <p><strong>Fecha:</strong> {state.selectedDate}</p>
                 <p><strong>Hora:</strong> {state.createData.horario_inicio} - {state.createData.horario_fin}</p>
               </div>
-              <Select
+              <PatientSearchField
                 label="Paciente *"
                 value={state.createData.id_paciente || ''}
-                onChange={(e) => updateCreateData('id_paciente', Number(e.target.value))}
-                options={patients.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} (${p.num_doc})` }))}
+                initialPatient={patients.find((patient) => patient.id === state.createData.id_paciente) ?? null}
+                onChange={(patientId) => updateCreateData('id_paciente', patientId ? Number(patientId) : 0)}
+                onResults={mergePatients}
                 error={state.errors.id_paciente}
               />
               {/* {state.createData.id_paciente > 0 && (

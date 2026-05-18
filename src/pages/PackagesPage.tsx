@@ -2,13 +2,14 @@
 // FISENT - PAQUETES PAGE (UI Mejorada)
 // ============================================================
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { packageService, patientService, professionalService, cie10Service } from '../data-access/services';
+import { packageService, professionalService, cie10Service } from '../data-access/services';
 import { Package as FisentPackage, PackageCreateDTO, Patient, Professional, Cie10 } from '../domain/models';
 import { packageSchema, PackageFormData } from '../domain/schemas';
 import {
   Card, Button, Select, Modal, Badge, TableSkeleton,
   EmptyState, PageHeader, SearchInput, ProgressBar, ConfirmDialog,
 } from '../components/ui/Components';
+import { PatientSearchField } from '../components/PatientSearchField';
 import { Package, Plus, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -68,7 +69,7 @@ export default function PackagesPage() {
     setSupportLoading(true);
     try {
       const [pts, pros, catalogItems, ciesList] = await Promise.allSettled([
-        patients.length > 0 ? Promise.resolve(patients) : patientService.getAll(),
+        Promise.resolve(patients),
         professionals.length > 0 ? Promise.resolve(professionals) : professionalService.getAll(),
         catalog.length > 0 ? Promise.resolve(catalog) : packageService.getCatalog(undefined, 1, 50),
         cies.length > 0 ? Promise.resolve(cies) : cie10Service.getAll(undefined, 1, 50),
@@ -130,6 +131,16 @@ export default function PackagesPage() {
     setForm((prev: any) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev: any) => { const n = { ...prev }; delete n[field]; return n; });
   };
+
+  const mergePatients = useCallback((foundPatients: Patient[]) => {
+    setPatients((current) => {
+      const merged = [...current];
+      foundPatients.forEach((patient) => {
+        if (!merged.some((item) => item.id === patient.id)) merged.push(patient);
+      });
+      return merged;
+    });
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -202,11 +213,12 @@ export default function PackagesPage() {
       {/* Create Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo Paquete" size="md">
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <Select
+          <PatientSearchField
             label="Paciente *"
             value={form.id_pacientes || ''}
-            onChange={(e) => updateField('id_pacientes', Number(e.target.value))}
-            options={patients.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} (${p.num_doc})` }))}
+            initialPatient={patients.find((patient) => patient.id === form.id_pacientes) ?? null}
+            onChange={(patientId) => updateField('id_pacientes', patientId ? Number(patientId) : 0)}
+            onResults={mergePatients}
             error={errors.id_pacientes}
           />
           <Select

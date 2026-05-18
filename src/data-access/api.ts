@@ -45,6 +45,7 @@ api.interceptors.response.use(
       const normalizedError = {
         status: body.status || error.response.status,
         message: body.message || error.message,
+        response: body.response,
         httpStatus: error.response.status,
         isBackendError: true,
       };

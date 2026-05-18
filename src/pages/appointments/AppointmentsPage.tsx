@@ -17,7 +17,6 @@ import { Calendar, Plus } from 'lucide-react';
 import {
   appointmentService,
   packageService,
-  patientService,
   cie10Service,
   professionalService,
 } from '../../data-access/services';
@@ -156,16 +155,13 @@ export default function AppointmentsPage() {
     setCatalogError(null);
 
     try {
-      const [pts, pros] = await Promise.allSettled([
-        patientService.getAll(),
+      const [pros] = await Promise.allSettled([
         professionalService.getAll(),
       ]);
 
-      setPatients(pts.status === 'fulfilled' ? pts.value || [] : []);
       setProfessionals(pros.status === 'fulfilled' ? pros.value || [] : []);
 
       const failedCatalogs = [
-        pts.status === 'rejected' ? 'pacientes' : null,
         pros.status === 'rejected' ? 'profesionales' : null,
       ].filter(Boolean);
 
@@ -198,6 +194,10 @@ export default function AppointmentsPage() {
 
   const openEdit = useCallback((appointment: Appointment) => {
     setEditingAppt(appointment);
+    const appointmentPatient = appointment.package?.patient ?? appointment.paquete?.patient ?? appointment.package?.paciente ?? appointment.paquete?.paciente;
+    if (appointmentPatient) {
+      setPatients((current) => [appointmentPatient, ...current.filter((patient) => patient.id !== appointmentPatient.id)]);
+    }
     setForm({
       id_paciente: appointment.id_paciente,
       id_profesional: appointment.id_profesional,
@@ -258,6 +258,7 @@ export default function AppointmentsPage() {
     setForm((prev: any) => ({
       ...prev,
       [field]: value,
+      ...(field === 'id_paciente' && prev.id_paciente !== value ? { id_paquete: null } : {}),
     }));
 
     setErrors((prev) => {
@@ -265,6 +266,16 @@ export default function AppointmentsPage() {
       const next = { ...prev };
       delete next[field];
       return next;
+    });
+  }, []);
+
+  const mergePatients = useCallback((foundPatients: Patient[]) => {
+    setPatients((current) => {
+      const merged = [...current];
+      foundPatients.forEach((patient) => {
+        if (!merged.some((item) => item.id === patient.id)) merged.push(patient);
+      });
+      return merged;
     });
   }, []);
 
@@ -344,19 +355,7 @@ export default function AppointmentsPage() {
         id_profesional: created.id_profesional || prev.id_profesional,
       }));
     } catch (err: any) {
-      const fallbackPackages = await packageService.getAvailableByPatient(form.id_paciente, editingAppt?.id).catch(() => []);
-      if (fallbackPackages.length > 0) {
-        const activePackage = fallbackPackages[0];
-        setPackages(fallbackPackages);
-        setForm((prev) => ({
-          ...prev,
-          id_paquete: activePackage.id,
-          id_profesional: activePackage.id_profesional || prev.id_profesional,
-        }));
-        toast.success('Se seleccionó un paquete activo existente para continuar');
-      } else {
-        toast.error(err?.message || 'No se pudo crear el paquete');
-      }
+      toast.error(err?.message || 'No se pudo crear el paquete');
     } finally {
       setPackageLoading(false);
     }
@@ -531,6 +530,7 @@ export default function AppointmentsPage() {
         onLoadPackageCatalogs={loadPackageCreationCatalogs}
         onCreatePackage={handleCreatePackage}
         onFieldChange={updateField}
+        onPatientsFound={mergePatients}
         onSubmit={handleSubmit}
       />
 
