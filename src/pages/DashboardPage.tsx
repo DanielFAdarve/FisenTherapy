@@ -109,7 +109,7 @@ export default function DashboardPage() {
                           {apt.paciente} 
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {apt.profesional?.nombres} {apt.profesional?.apellidos}
+                          {apt.profesional_nombre || [apt.profesional, apt.apellido_profesional].filter(Boolean).join(' ') || 'Profesional sin asignar'}
                         </p>
                       </div>
                     </div>
@@ -169,9 +169,9 @@ export default function DashboardPage() {
               <div className="divide-y divide-gray-50">
                 {recentPatients.map((p: any, i: number) => (
                   <div key={p.id} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50/50 transition-colors">
-                    <Avatar name={`${p.nombres} ${p.apellidos}`} size="sm" color={avatarColors[i % avatarColors.length]} />
+                    <Avatar name={`${p.nombre} ${p.apellido}`} size="sm" color={avatarColors[i % avatarColors.length]} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{p.nombres} {p.apellidos}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{p.nombre} {p.apellido}</p>
                       <p className="text-xs text-gray-400">{p.tipo_doc} {p.num_doc}</p>
                     </div>
                     <Badge variant={p.estado ? 'success' : 'danger'}>{p.estado ? 'Activo' : 'Inactivo'}</Badge>

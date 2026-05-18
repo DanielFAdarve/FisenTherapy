@@ -30,7 +30,6 @@ export function AppointmentsList({ appointments, onEdit, onCancel }: Props) {
       {appointments.map((appointment, index) => {
         const isClosed = appointment.estado === 'CANCELADA' || appointment.estado === 'COMPLETADA';
         const name = patientName(appointment);
-        console.log(appointment);
         return (
           <div
             key={appointment.id}

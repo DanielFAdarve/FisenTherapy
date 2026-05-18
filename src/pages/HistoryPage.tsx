@@ -145,7 +145,7 @@ export default function HistoryPage() {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nueva Evolucion" size="lg">
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <Select label="Cita *" value={form.id_cita || ''} onChange={(e) => updateField('id_cita', Number(e.target.value))} options={appointments.map((a) => ({ value: a.id, label: `#${a.id} - ${a.paciente?.nombre} ${a.paciente?.apellido} (${a.fecha?.split('T')[0]})` }))} error={errors.id_cita} />
+          <Select label="Cita *" value={form.id_cita || ''} onChange={(e) => updateField('id_cita', Number(e.target.value))} options={appointments.map((a) => ({ value: a.id, label: `#${a.id} - ${a.paciente_nombre || a.paciente || 'Paciente'} (${a.fecha?.split('T')[0]})` }))} error={errors.id_cita} />
           <Select label="Diagnostico CIE10 *" value={form.id_cie || ''} onChange={(e) => updateField('id_cie', Number(e.target.value))} options={cie10List.map((c) => ({ value: c.id, label: `${c.codigo} - ${c.descripcion}` }))} error={errors.id_cie} />
           <Textarea label="Evolucion *" value={form.evolucion} onChange={(e) => updateField('evolucion', e.target.value)} rows={5} placeholder="Describa la evolucion del paciente en esta sesion..." error={errors.evolucion} />
           <div className="flex items-center gap-2">
