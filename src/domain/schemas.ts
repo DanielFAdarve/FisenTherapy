@@ -209,9 +209,29 @@ export const appointmentSchema = z.object({
 export const clinicalHistorySchema = z.object({
   id_cita: z.number().min(1, 'Seleccione una cita'),
   id_cie: z.number().min(1, 'Seleccione un diagnóstico CIE10'),
-  evolucion: z.string().min(10, 'Evolución mínimo 10 caracteres').max(2000),
+  evolucion: z.string().max(2000).optional().or(z.literal('')),
+  descripcion_estado_paciente: z.string().max(2000).optional().or(z.literal('')),
+  subjetivo: z.string().max(2000).optional().or(z.literal('')),
+  objetivo: z.string().max(2000).optional().or(z.literal('')),
+  intervencion: z.string().max(2000).optional().or(z.literal('')),
+  recomendaciones: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes_personales: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes_patologicos: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes_quirurgicos: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes_traumaticos: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes_farmacologicos: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes_familiares: z.string().max(2000).optional().or(z.literal('')),
+  antecedentes_sociales: z.string().max(2000).optional().or(z.literal('')),
   antecedentes_sincronizados: z.boolean().optional(),
-});
+}).refine((data) => (
+  Boolean(data.evolucion?.trim()) ||
+  Boolean(data.descripcion_estado_paciente?.trim()) ||
+  Boolean(data.subjetivo?.trim()) ||
+  Boolean(data.objetivo?.trim()) ||
+  Boolean(data.intervencion?.trim()) ||
+  Boolean(data.recomendaciones?.trim())
+), { message: 'Registre al menos una evolución o campo clínico', path: ['evolucion'] });
 
 // --- CIE10 ---
 export const cie10Schema = z.object({

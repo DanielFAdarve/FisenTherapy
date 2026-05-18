@@ -82,6 +82,11 @@ const hasScheduleCollision = (
   toMinutes(appointment.horario_fin) > toMinutes(form.horario_inicio)
 );
 
+const getAppointmentPackageId = (appointment: Appointment) =>
+  Number(appointment.id_paquete ?? appointment.id_paquetes ?? appointment.paquete?.id ?? appointment.package?.id ?? 0) || null;
+
+const getAppointmentPackage = (appointment: Appointment) => appointment.package ?? appointment.paquete ?? null;
+
 export default function AppointmentsPage() {
   const [filterDate, setFilterDate] = useState(today());
   const [searchInput, setSearchInput] = useState('');
@@ -194,14 +199,30 @@ export default function AppointmentsPage() {
 
   const openEdit = useCallback((appointment: Appointment) => {
     setEditingAppt(appointment);
-    const appointmentPatient = appointment.package?.patient ?? appointment.paquete?.patient ?? appointment.package?.paciente ?? appointment.paquete?.paciente;
+    const selectedPackage = getAppointmentPackage(appointment);
+    const selectedPackageId = getAppointmentPackageId(appointment);
+    const appointmentPatient = selectedPackage?.patient ?? selectedPackage?.paciente;
+
     if (appointmentPatient) {
       setPatients((current) => [appointmentPatient, ...current.filter((patient) => patient.id !== appointmentPatient.id)]);
+    }
+    if (selectedPackage) {
+      setPackages((current) => [
+        {
+          ...selectedPackage,
+          id: selectedPackageId ?? selectedPackage.id,
+          id_paquete: selectedPackageId ?? selectedPackage.id_paquete,
+          id_paciente: selectedPackage.id_paciente || appointment.id_paciente,
+          id_pacientes: selectedPackage.id_pacientes || appointment.id_paciente,
+          tiene_cita_actual: true,
+        },
+        ...current.filter((pkg) => pkg.id !== selectedPackageId),
+      ]);
     }
     setForm({
       id_paciente: appointment.id_paciente,
       id_profesional: appointment.id_profesional,
-      id_paquete: appointment.id_paquete || null,
+      id_paquete: selectedPackageId,
       fecha: appointment.fecha.split('T')[0],
       horario_inicio: appointment.horario_inicio.slice(0, 5),
       horario_fin: appointment.horario_fin.slice(0, 5),
@@ -209,6 +230,7 @@ export default function AppointmentsPage() {
     });
     setErrors({});
     setCollisionWarning(null);
+    setPackageError(null);
     setModalOpen(true);
   }, []);
 
@@ -298,9 +320,24 @@ export default function AppointmentsPage() {
     setPackageError(null);
     try {
       const available = await packageService.getAvailableByPatient(patientId, quoteId);
-      setPackages(available || []);
+      const currentPackage = editingAppt ? getAppointmentPackage(editingAppt) : null;
+      const currentPackageId = editingAppt ? getAppointmentPackageId(editingAppt) : null;
+      const packagesWithCurrent = currentPackage && currentPackageId && !(available || []).some((pkg) => pkg.id === currentPackageId)
+        ? [
+            {
+              ...currentPackage,
+              id: currentPackageId,
+              id_paquete: currentPackageId,
+              id_paciente: currentPackage.id_paciente || patientId,
+              id_pacientes: currentPackage.id_pacientes || patientId,
+              tiene_cita_actual: true,
+            },
+            ...(available || []),
+          ]
+        : (available || []);
+      setPackages(packagesWithCurrent);
       setForm((prev) => {
-        if (!prev.id_paquete || available?.some((pkg) => pkg.id === prev.id_paquete)) return prev;
+        if (!prev.id_paquete || packagesWithCurrent.some((pkg) => pkg.id === prev.id_paquete)) return prev;
         return { ...prev, id_paquete: null };
       });
     } catch (err: any) {
@@ -309,7 +346,7 @@ export default function AppointmentsPage() {
     } finally {
       setPackageLoading(false);
     }
-  }, []);
+  }, [editingAppt]);
 
   useEffect(() => {
     if (!modalOpen || !form.id_paciente) return;

@@ -1,7 +1,7 @@
 // ============================================================
 // FISENT - CALENDARIO PAGE (Flujo completo por modales)
 // ============================================================
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   appointmentService, professionalService,
   packageService, paymentService, cie10Service,
@@ -24,7 +24,7 @@ import {
 import toast from 'react-hot-toast';
 import {
   format, addDays, subDays, startOfWeek, addWeeks, subWeeks,
-  eachDayOfInterval, startOfMonth, endOfMonth,
+  eachDayOfInterval, startOfMonth, endOfMonth, endOfWeek,
   addMonths, subMonths, isToday, isSameMonth,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -64,6 +64,15 @@ interface CalendarState {
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const avatarColors = ['teal', 'blue', 'purple', 'amber', 'emerald', 'rose'] as const;
+const PROFESSIONAL_COLORS = [
+  { dot: 'bg-teal-500', bg: 'bg-teal-50', border: 'border-teal-300', text: 'text-teal-800', ring: 'ring-teal-200' },
+  { dot: 'bg-blue-500', bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-800', ring: 'ring-blue-200' },
+  { dot: 'bg-purple-500', bg: 'bg-purple-50', border: 'border-purple-300', text: 'text-purple-800', ring: 'ring-purple-200' },
+  { dot: 'bg-amber-500', bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', ring: 'ring-amber-200' },
+  { dot: 'bg-rose-500', bg: 'bg-rose-50', border: 'border-rose-300', text: 'text-rose-800', ring: 'ring-rose-200' },
+  { dot: 'bg-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-300', text: 'text-emerald-800', ring: 'ring-emerald-200' },
+] as const;
+
 const PAYMENT_METHODS = [
   { value: 'EFECTIVO', label: 'Efectivo' },
   { value: 'TARJETA', label: 'Tarjeta' },
@@ -86,6 +95,7 @@ const emptyPayment = { valor: 0, metodo_pago: 'EFECTIVO' as PaymentMethod, obser
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | ''>('');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -125,7 +135,11 @@ export default function CalendarPage() {
         appointmentService.getPaginated({
           page: 1,
           limit: 200,
-          filters: { fechaInicio: startDate, fechaFin: endDate },
+          filters: {
+            fechaInicio: startDate,
+            fechaFin: endDate,
+            ...(selectedProfessionalId ? { id_profesional: selectedProfessionalId } : {}),
+          },
         }).catch(() => ({ data: [] as Appointment[] })),
         professionalService.getAll().catch(() => []),
       ]);
@@ -134,9 +148,27 @@ export default function CalendarPage() {
     } catch (err: any) {
       toast.error(err?.message || 'Error al cargar datos');
     } finally { setLoading(false); }
-  }, [currentDate, viewMode]);
+  }, [currentDate, selectedProfessionalId, viewMode]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const filteredAppointments = useMemo(() => (
+    selectedProfessionalId
+      ? appointments.filter((appointment) => appointment.id_profesional === selectedProfessionalId)
+      : appointments
+  ), [appointments, selectedProfessionalId]);
+
+  const getAppointmentPackageId = (appointment: Appointment) =>
+    Number(appointment.id_paquete ?? appointment.id_paquetes ?? appointment.paquete?.id ?? appointment.package?.id ?? 0) || null;
+
+  const getAppointmentPackage = (appointment: Appointment) => appointment.package ?? appointment.paquete ?? null;
+
+  const getProfessionalColor = (professionalId?: number) =>
+    PROFESSIONAL_COLORS[Math.abs(Number(professionalId ?? 0)) % PROFESSIONAL_COLORS.length];
+
+  const getProfessionalName = (appointment: Appointment) => (
+    appointment.profesional_nombre || appointment.profesional || 'Profesional sin asignar'
+  );
 
   // ============================================================
   // NAVIGATION
@@ -158,16 +190,22 @@ export default function CalendarPage() {
   // ============================================================
   const getApptsForSlot = useCallback((date: string, hour: number) => {
     const hourStr = `${String(hour).padStart(2, '0')}:`;
-    return appointments.filter((a) =>
+    return filteredAppointments.filter((a) =>
       a.fecha.split('T')[0] === date && a.horario_inicio.startsWith(hourStr) && a.estado !== 'CANCELADA'
     );
-  }, [appointments]);
+  }, [filteredAppointments]);
 
-  const getApptColor = (apt: Appointment): string => {
-    if (apt.id_paquete) return 'bg-teal-100 border-teal-300 text-teal-800';
-    if (apt.estado === 'CONFIRMADA') return 'bg-emerald-100 border-emerald-300 text-emerald-800';
+  const getApptColor = (apt: Appointment, isSharedSlot = false): string => {
     if (apt.estado === 'COMPLETADA') return 'bg-gray-100 border-gray-300 text-gray-600';
-    return 'bg-blue-100 border-blue-300 text-blue-800';
+    const color = getProfessionalColor(apt.id_profesional);
+    return `${color.bg} ${color.border} ${color.text} ${isSharedSlot ? `ring-2 ${color.ring}` : ''}`;
+  };
+
+  const getSharedSlotHint = (slotAppts: Appointment[]) => {
+    const professionalCount = new Set(slotAppts.map((apt) => apt.id_profesional)).size;
+    return slotAppts.length > 1 && professionalCount > 1
+      ? `${professionalCount} profesionales en este horario`
+      : null;
   };
 
   const patientHasActivePackages = (patientId: number): FisentPackage[] => {
@@ -408,16 +446,54 @@ export default function CalendarPage() {
   const startEdit = () => {
     if (!state.selectedAppointment) return;
     const apt = state.selectedAppointment;
+    const selectedPackageId = getAppointmentPackageId(apt);
+    const currentPackage = getAppointmentPackage(apt);
+
+    if (currentPackage && selectedPackageId) {
+      setPackages((current) => [
+        {
+          ...currentPackage,
+          id: selectedPackageId,
+          id_paquete: selectedPackageId,
+          id_paciente: currentPackage.id_paciente || apt.id_paciente,
+          id_pacientes: currentPackage.id_pacientes || apt.id_paciente,
+          tiene_cita_actual: true,
+        },
+        ...current.filter((pkg) => pkg.id !== selectedPackageId),
+      ]);
+    }
+
     setState(s => ({
       ...s, step: 'edit-appointment',
       createData: {
         id_paciente: apt.id_paciente, id_profesional: apt.id_profesional,
-        id_paquete: apt.id_paquete || null, fecha: apt.fecha.split('T')[0],
-        horario_inicio: apt.horario_inicio, horario_fin: apt.horario_fin,
+        id_paquete: selectedPackageId, fecha: apt.fecha.split('T')[0],
+        horario_inicio: apt.horario_inicio.slice(0, 5), horario_fin: apt.horario_fin.slice(0, 5),
         observaciones: apt.observaciones || '',
       },
       errors: {}, collisionWarning: null,
     }));
+
+    if (apt.id_paciente) {
+      packageService.getAvailableByPatient(apt.id_paciente, apt.id)
+        .then((available) => {
+          const packagesWithCurrent = currentPackage && selectedPackageId && !(available || []).some((pkg) => pkg.id === selectedPackageId)
+            ? [{
+                ...currentPackage,
+                id: selectedPackageId,
+                id_paquete: selectedPackageId,
+                id_paciente: currentPackage.id_paciente || apt.id_paciente,
+                id_pacientes: currentPackage.id_pacientes || apt.id_paciente,
+                tiene_cita_actual: true,
+              }, ...(available || [])]
+            : (available || []);
+          setPackages((current) => [
+            ...packagesWithCurrent,
+            ...current.filter((pkg) => pkg.id_paciente !== apt.id_paciente && !packagesWithCurrent.some((item) => item.id === pkg.id)),
+          ]);
+        })
+        .catch(() => undefined);
+    }
   };
 
   const handleEditConfirm = async () => {
@@ -519,7 +595,7 @@ export default function CalendarPage() {
         <div className="grid grid-cols-7">
           {days.map((day, i) => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            const dayAppts = appointments.filter((a) => a.fecha.split('T')[0] === dateStr && a.estado !== 'CANCELADA');
+            const dayAppts = filteredAppointments.filter((a) => a.fecha.split('T')[0] === dateStr && a.estado !== 'CANCELADA');
             const isCurrentMonth = isSameMonth(day, currentDate);
             return (
               <div
@@ -578,17 +654,30 @@ export default function CalendarPage() {
               {weekDays.map((day, dayIdx) => {
                 const dateStr = format(day, 'yyyy-MM-dd');
                 const slotAppts = getApptsForSlot(dateStr, hour);
+                const sharedHint = getSharedSlotHint(slotAppts);
                 return (
                   <div key={dayIdx}
                     className={`py-1 px-0.5 md:px-1 min-h-[44px] md:min-h-[48px] border-r border-gray-50 last:border-r-0 cursor-pointer transition-colors hover:bg-teal-50/40 ${isToday(day) ? 'bg-teal-50/20' : ''}`}
+                    title={sharedHint || undefined}
                     onClick={() => handleSlotClick(dateStr, hour)}>
-                    {slotAppts.map((apt) => (
-                      <div key={apt.id}
-                        className={`text-[9px] md:text-[11px] px-1 md:px-2 py-0.5 md:py-1 rounded-lg border mb-0.5 font-medium truncate ${getApptColor(apt)}`}
-                        onClick={(e) => { e.stopPropagation(); setState(s => ({ ...s, step: 'view-appointment', selectedAppointment: apt, selectedDate: dateStr })); }}>
-                        <span className="hidden md:inline">{apt.horario_inicio} </span>{apt.paciente?.split(' ')[0]}
+                    {sharedHint && (
+                      <div className="mb-1 rounded-md bg-white/80 px-1 py-0.5 text-[8px] md:text-[9px] font-bold text-gray-500 ring-1 ring-gray-200">
+                        {sharedHint}
                       </div>
-                    ))}
+                    )}
+                    <div className={slotAppts.length > 1 ? 'grid grid-cols-1 gap-1 xl:grid-cols-2' : ''}>
+                      {slotAppts.map((apt) => {
+                        const color = getProfessionalColor(apt.id_profesional);
+                        return (
+                          <div key={apt.id}
+                            className={`relative text-[9px] md:text-[11px] pl-2.5 pr-1 md:pr-2 py-0.5 md:py-1 rounded-lg border font-medium truncate ${getApptColor(apt, Boolean(sharedHint))}`}
+                            onClick={(e) => { e.stopPropagation(); setState(s => ({ ...s, step: 'view-appointment', selectedAppointment: apt, selectedDate: dateStr })); }}>
+                            <span className={`absolute left-1 top-1 bottom-1 w-1 rounded-full ${color.dot}`} />
+                            <span className="hidden md:inline">{apt.horario_inicio} </span>{apt.paciente?.split(' ')[0]}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
@@ -604,7 +693,7 @@ export default function CalendarPage() {
   // ============================================================
   const renderDayView = () => {
     const dateStr = format(currentDate, 'yyyy-MM-dd');
-    const dayAppts = appointments.filter((a) => a.fecha.split('T')[0] === dateStr && a.estado !== 'CANCELADA');
+    const dayAppts = filteredAppointments.filter((a) => a.fecha.split('T')[0] === dateStr && a.estado !== 'CANCELADA');
     return (
       <Card className="overflow-hidden">
         <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-emerald-50/30">
@@ -621,18 +710,29 @@ export default function CalendarPage() {
                 </div>
                 <div className="flex-1 py-2 px-2 md:px-3 min-h-[52px] md:min-h-[56px] cursor-pointer transition-colors hover:bg-teal-50/40"
                   onClick={() => handleSlotClick(dateStr, hour)}>
-                  {slotAppts.map((apt) => (
-                    <div key={apt.id}
-                      className={`flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 rounded-xl border mb-1.5 cursor-pointer hover:shadow-md transition-all ${getApptColor(apt)}`}
-                      onClick={(e) => { e.stopPropagation(); setState(s => ({ ...s, step: 'view-appointment', selectedAppointment: apt, selectedDate: dateStr })); }}>
-                      <Avatar name={`${apt.paciente  || ''}`} size="sm" color={avatarColors[apt.id % avatarColors.length]} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs md:text-sm font-bold truncate">{apt.paciente}</p>
-                        <p className="text-[10px] md:text-xs opacity-70">{apt.profesional}</p>
-                      </div>
-                      <Badge variant={apt.estado === 'CONFIRMADA' ? 'success' : apt.estado === 'COMPLETADA' ? 'neutral' : 'info'}>{apt.estado}</Badge>
+                  {getSharedSlotHint(slotAppts) && (
+                    <div className="mb-2 inline-flex rounded-full bg-white px-2 py-1 text-[10px] font-bold text-gray-500 ring-1 ring-gray-200">
+                      {getSharedSlotHint(slotAppts)}
                     </div>
-                  ))}
+                  )}
+                  <div className={slotAppts.length > 1 ? 'grid grid-cols-1 gap-2 lg:grid-cols-2' : ''}>
+                    {slotAppts.map((apt) => {
+                      const color = getProfessionalColor(apt.id_profesional);
+                      return (
+                        <div key={apt.id}
+                          className={`flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 rounded-xl border cursor-pointer hover:shadow-md transition-all ${getApptColor(apt, Boolean(getSharedSlotHint(slotAppts)))}`}
+                          onClick={(e) => { e.stopPropagation(); setState(s => ({ ...s, step: 'view-appointment', selectedAppointment: apt, selectedDate: dateStr })); }}>
+                          <div className={`h-8 w-1.5 rounded-full ${color.dot}`} />
+                          <Avatar name={`${apt.paciente  || ''}`} size="sm" color={avatarColors[apt.id % avatarColors.length]} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs md:text-sm font-bold truncate">{apt.paciente}</p>
+                            <p className="text-[10px] md:text-xs opacity-70">{getProfessionalName(apt)}</p>
+                          </div>
+                          <Badge variant={apt.estado === 'CONFIRMADA' ? 'success' : apt.estado === 'COMPLETADA' ? 'neutral' : 'info'}>{apt.estado}</Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             );
@@ -651,7 +751,7 @@ export default function CalendarPage() {
     const patient = patients.find(p => p.id === state.createData.id_paciente);
     const professional = professionals.find(p => p.id === state.createData.id_profesional);
     const pkg = packages.find(p => p.id === state.createData.id_paquete);
-    const activePkgs = patient ? patientHasActivePackages(patient.id) : [];
+    const activePkgs = state.createData.id_paciente ? patientHasActivePackages(state.createData.id_paciente) : [];
 
     switch (state.step) {
       // ---- SUCCESS ----
@@ -915,6 +1015,21 @@ export default function CalendarPage() {
                 <Input label="Hora Inicio *" type="time" value={state.createData.horario_inicio} onChange={(e) => updateCreateData('horario_inicio', e.target.value)} error={state.errors.horario_inicio} />
                 <Input label="Hora Fin *" type="time" value={state.createData.horario_fin} onChange={(e) => updateCreateData('horario_fin', e.target.value)} error={state.errors.horario_fin} />
               </div>
+              <Select
+                label="Paquete disponible *"
+                value={state.createData.id_paquete || ''}
+                onChange={(e) => {
+                  const packageId = e.target.value ? Number(e.target.value) : null;
+                  const selectedPackage = activePkgs.find((item) => item.id === packageId);
+                  updateCreateData('id_paquete', packageId);
+                  if (selectedPackage?.id_profesional) updateCreateData('id_profesional', selectedPackage.id_profesional);
+                }}
+                options={activePkgs.map((item) => ({
+                  value: item.id,
+                  label: `${item.nombre} (${item.sesiones_realizadas}/${item.cantidad_sesiones} usadas · ${item.sesiones_disponibles ?? item.resumen_sesiones?.sesiones_disponibles ?? 0} disponibles${item.tiene_cita_actual ? ' · cita actual' : ''})`,
+                }))}
+                error={state.errors.id_paquete}
+              />
               <Textarea label="Observaciones" value={state.createData.observaciones} onChange={(e) => updateCreateData('observaciones', e.target.value)} rows={2} />
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                 <Button variant="secondary" onClick={() => goStep('view-appointment')}>Cancelar</Button>
@@ -1039,6 +1154,18 @@ export default function CalendarPage() {
             <Button variant="secondary" size="sm" onClick={goToday} className="font-bold text-xs">Hoy</Button>
             <button onClick={goNext} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500"><ChevronRight className="w-5 h-5" /></button>
           </div>
+          <Select
+            value={selectedProfessionalId || ''}
+            onChange={(event) => setSelectedProfessionalId(event.target.value ? Number(event.target.value) : '')}
+            options={[
+              { value: '', label: 'Todos los profesionales' },
+              ...professionals.filter((professional) => professional.estado).map((professional) => ({
+                value: professional.id,
+                label: `${professional.nombre} ${professional.apellido}`,
+              })),
+            ]}
+            className="min-w-[210px]"
+          />
           <div className="flex gap-0.5 bg-gray-100 rounded-xl p-0.5 ml-auto sm:ml-0">
             {(['month', 'week', 'day'] as ViewMode[]).map((v) => (
               <button key={v} onClick={() => setViewMode(v)}
@@ -1055,9 +1182,16 @@ export default function CalendarPage() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 md:gap-4 text-[10px] md:text-xs text-gray-500">
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-teal-100 border border-teal-300" />Con paquete</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" />Confirmada</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-100 border border-blue-300" />Programada</div>
+        {professionals.filter((professional) => !selectedProfessionalId || professional.id === selectedProfessionalId).slice(0, 6).map((professional) => {
+          const color = getProfessionalColor(professional.id);
+          return (
+            <div key={professional.id} className="flex items-center gap-1.5">
+              <div className={`w-3 h-3 rounded ${color.dot}`} />
+              {professional.nombre} {professional.apellido}
+            </div>
+          );
+        })}
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-white border-2 border-gray-300 ring-2 ring-gray-200" />Horario compartido</div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-100 border border-gray-300" />Completada</div>
       </div>
 
@@ -1076,12 +1210,4 @@ export default function CalendarPage() {
       {renderModals()}
     </div>
   );
-}
-
-// ============================================================
-// HELPERS
-// ============================================================
-function endOfWeek(date: Date): Date {
-  const start = startOfWeek(date, { weekStartsOn: 1 as const });
-  return addDays(start, 6);
 }
