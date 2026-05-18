@@ -3,6 +3,15 @@
 // ============================================================
 import { z } from 'zod';
 
+const localDateString = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const isValidDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00`).getTime());
+
 // --- Auth ---
 export const loginSchema = z.object({
   username: z.string().min(3, 'Usuario mínimo 3 caracteres'),
@@ -179,8 +188,7 @@ export const appointmentSchema = z.object({
   id_profesional: z.number().min(1, 'Seleccione un profesional'),
   id_paquete: z.number().nullable().refine((value) => Boolean(value), 'Seleccione o cree un paquete para la cita'),
   fecha: z.string().refine((val) => {
-    const d = new Date(val);
-    return d instanceof Date && !isNaN(d.getTime()) && d >= new Date(new Date().toDateString());
+    return isValidDateOnly(val) && val >= localDateString();
   }, 'La fecha debe ser hoy o posterior'),
   horario_inicio: z.string().refine(
     (val) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(val),

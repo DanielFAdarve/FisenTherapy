@@ -312,6 +312,12 @@ export interface ClinicalHistory {
   id_cita: number;
   id_cie: number;
   evolucion: string;
+  fecha_evolucion?: string;
+  descripcion_estado_paciente?: string;
+  subjetivo?: string;
+  objetivo?: string;
+  intervencion?: string;
+  recomendaciones?: string;
   antecedentes_sincronizados: boolean;
   created_at: string;
   updated_at: string;
@@ -322,7 +328,21 @@ export interface ClinicalHistory {
 export interface ClinicalHistoryCreateDTO {
   id_cita: number;
   id_cie: number;
-  evolucion: string;
+  evolucion?: string;
+  fecha_evolucion?: string;
+  descripcion_estado_paciente?: string;
+  subjetivo?: string;
+  objetivo?: string;
+  intervencion?: string;
+  recomendaciones?: string;
+  antecedentes?: string;
+  antecedentes_personales?: string;
+  antecedentes_patologicos?: string;
+  antecedentes_quirurgicos?: string;
+  antecedentes_traumaticos?: string;
+  antecedentes_farmacologicos?: string;
+  antecedentes_familiares?: string;
+  antecedentes_sociales?: string;
   antecedentes_sincronizados?: boolean;
 }
 

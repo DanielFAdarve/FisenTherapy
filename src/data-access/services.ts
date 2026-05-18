@@ -116,8 +116,14 @@ export const packageService = {
     return normalizePackage(res.data.response);
   },
   create: async (data: PackageCreateDTO) => {
-    const res = await api.post<BackendResponse<any>>('/packages/create', normalizePackageCreatePayload(data));
-    return normalizePackage(res.data.response);
+    try {
+      const res = await api.post<BackendResponse<any>>('/packages/create', normalizePackageCreatePayload(data));
+      return normalizePackage(res.data.response);
+    } catch (err: any) {
+      const existingPackage = err?.response?.existingPackage;
+      if (existingPackage) return normalizePackage(existingPackage);
+      throw err;
+    }
   },
   close: async (id: number) => {
     const res = await api.put<BackendResponse<any>>(`/packages/close/${id}`);
@@ -195,31 +201,25 @@ export const appointmentService = {
 // --- Clinical History Service ---
 export const historyService = {
   getByAppointment: async (idCita: number) => {
-    const res = await api.get<BackendResponse<ClinicalHistory[]>>(`/history/get-by-quote/${idCita}`);
-    return res.data.response;
+    const res = await api.get<BackendResponse<any | any[]>>(`/history/get-by-quote/${idCita}`);
+    const payload = Array.isArray(res.data.response) ? res.data.response : [res.data.response].filter(Boolean);
+    return payload.map(normalizeClinicalHistory);
   },
-  getByPatient: async (idPaciente: number) => {
-    try {
-      const res = await api.get<BackendResponse<ClinicalHistory[]>>(`/history/get-by-patient/${idPaciente}`);
-      return res.data.response;
-    } catch {
-      const appointments = await appointmentService.getAll(undefined, undefined, idPaciente);
-      const histories = await Promise.all(
-        appointments.map((appointment) => historyService.getByAppointment(appointment.id).catch(() => []))
-      );
-      return histories.flat();
-    }
+  getByPatient: async (idPaciente: number, params: PaginationParams = {}) => {
+    const query = buildQueryParams({ page: 1, limit: 20, ...params });
+    const res = await api.get<BackendResponse<any[]>>(`/history/get-by-patient/${idPaciente}?${query}`);
+    return (res.data.response ?? []).map(normalizeClinicalHistory);
   },
   create: async (data: ClinicalHistoryCreateDTO) => {
-    const res = await api.post<BackendResponse<ClinicalHistory>>('/history/create', data);
-    return res.data.response;
+    const res = await api.post<BackendResponse<any>>('/history/create', normalizeClinicalHistoryPayload(data));
+    return normalizeClinicalHistory(res.data.response);
   },
   update: async (id: number, data: Partial<ClinicalHistoryCreateDTO>) => {
-    const res = await api.put<BackendResponse<ClinicalHistory>>(`/history/update/${id}`, data);
-    return res.data.response;
+    const res = await api.put<BackendResponse<any>>(`/history/update/${id}`, normalizeClinicalHistoryPayload(data));
+    return normalizeClinicalHistory(res.data.response);
   },
   exportDocument: async (id: number) => {
-    const res = await api.get<Blob>(`/history/export-pdf/${id}`, { responseType: 'blob' });
+    const res = await api.get<Blob>(`/history/export-docx/${id}`, { responseType: 'blob' });
     return res.data;
   },
 };
@@ -439,6 +439,48 @@ function normalizeAppointmentPayload(data: Partial<AppointmentCreateDTO>) {
   delete payload.id_paquete;
   delete payload.observaciones;
   if (payload.id_estado_citas === undefined) payload.id_estado_citas = 1;
+  if (payload.recordatorio === undefined) payload.recordatorio = false;
+  return payload;
+}
+
+function normalizeClinicalHistory(data: any): ClinicalHistory {
+  const source = data?.historia ?? data?.history ?? data;
+  const quote = source?.cita ?? source?.Quotes ?? source?.quote;
+  const cie = source?.cie10 ?? source?.Cie10 ?? source?.cie10_historia;
+  const descripcion = source?.descripcion_estado_paciente ?? source?.evolucion ?? '';
+  const textParts = [
+    source?.subjetivo ? `Subjetivo: ${source.subjetivo}` : '',
+    source?.objetivo ? `Objetivo: ${source.objetivo}` : '',
+    source?.intervencion ? `Intervención: ${source.intervencion}` : '',
+    source?.recomendaciones ? `Recomendaciones: ${source.recomendaciones}` : '',
+  ].filter(Boolean);
+  const evolucion = source?.evolucion ?? [descripcion, ...textParts].filter(Boolean).join('\n\n');
+
+  return {
+    ...source,
+    id: Number(source?.id ?? source?.id_historial ?? 0),
+    id_cita: Number(source?.id_cita ?? quote?.id ?? 0),
+    id_cie: Number(source?.id_cie ?? cie?.id ?? 0),
+    evolucion,
+    fecha_evolucion: source?.fecha_evolucion ?? source?.fecha ?? quote?.fecha_agendamiento,
+    descripcion_estado_paciente: descripcion,
+    antecedentes_sincronizados: Boolean(source?.antecedentes_sincronizados),
+    created_at: source?.created_at ?? source?.fecha_evolucion ?? '',
+    updated_at: source?.updated_at ?? '',
+    cita: quote ? normalizeAppointment(quote) : source?.cita,
+    cie10: cie,
+  } as ClinicalHistory;
+}
+
+function normalizeClinicalHistoryPayload(data: Partial<ClinicalHistoryCreateDTO>) {
+  const payload: Record<string, unknown> = { ...data };
+  const evolucion = typeof payload.evolucion === 'string' ? payload.evolucion.trim() : '';
+  if (evolucion) {
+    if (!payload.descripcion_estado_paciente) payload.descripcion_estado_paciente = evolucion;
+    if (!payload.recomendaciones) payload.recomendaciones = evolucion;
+  }
+  delete payload.evolucion;
+  delete payload.antecedentes_sincronizados;
   return payload;
 }
 
