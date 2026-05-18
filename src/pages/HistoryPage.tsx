@@ -2,7 +2,7 @@
 // FISENT - HISTORIA CLINICA PAGE (UI Mejorada)
 // ============================================================
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { historyService, appointmentService, cie10Service } from '../data-access/services';
+import { historyService, appointmentService, cie10Service, patientService } from '../data-access/services';
 import { ClinicalHistory, ClinicalHistoryCreateDTO, Appointment, Cie10, Patient } from '../domain/models';
 import { clinicalHistorySchema, ClinicalHistoryFormData } from '../domain/schemas';
 import {
@@ -17,6 +17,19 @@ const emptyForm: ClinicalHistoryFormData = {
   id_cita: 0,
   id_cie: 0,
   evolucion: '',
+  descripcion_estado_paciente: '',
+  subjetivo: '',
+  objetivo: '',
+  intervencion: '',
+  recomendaciones: '',
+  antecedentes: '',
+  antecedentes_personales: '',
+  antecedentes_patologicos: '',
+  antecedentes_quirurgicos: '',
+  antecedentes_traumaticos: '',
+  antecedentes_farmacologicos: '',
+  antecedentes_familiares: '',
+  antecedentes_sociales: '',
   antecedentes_sincronizados: false,
 };
 
@@ -31,6 +44,7 @@ export default function HistoryPage() {
   const [form, setForm] = useState<ClinicalHistoryFormData>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [editingHistory, setEditingHistory] = useState<ClinicalHistory | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -56,7 +70,57 @@ export default function HistoryPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const openCreate = () => { setForm(emptyForm); setErrors({}); setModalOpen(true); };
+  const hydrateBackgroundFromAppointment = async (appointmentId: number) => {
+    const appointment = appointments.find((item) => item.id === appointmentId);
+    const patientId = appointment?.id_paciente || Number(selectedPatient || 0);
+    const existing = histories.find((history) => history.id_cita === appointmentId) ?? null;
+
+    if (existing) {
+      setEditingHistory(existing);
+      setForm((prev) => ({
+        ...prev,
+        id_cita: existing.id_cita,
+        id_cie: existing.id_cie || prev.id_cie,
+        evolucion: existing.evolucion || '',
+        descripcion_estado_paciente: existing.descripcion_estado_paciente || '',
+        subjetivo: existing.subjetivo || '',
+        objetivo: existing.objetivo || '',
+        intervencion: existing.intervencion || '',
+        recomendaciones: existing.recomendaciones || '',
+        antecedentes_sincronizados: existing.antecedentes_sincronizados,
+      }));
+      return;
+    }
+
+    setEditingHistory(null);
+    if (!patientId) return;
+
+    try {
+      const patient = await patientService.getById(patientId);
+      setPatients((current) => [patient, ...current.filter((item) => item.id !== patient.id)]);
+      setForm((prev) => ({
+        ...prev,
+        antecedentes: patient.antecedentes || 'No registra',
+        antecedentes_personales: patient.antecedentes_personales || 'No registra',
+        antecedentes_patologicos: patient.antecedentes_patologicos || 'No registra',
+        antecedentes_quirurgicos: patient.antecedentes_quirurgicos || 'No registra',
+        antecedentes_traumaticos: patient.antecedentes_traumaticos || 'No registra',
+        antecedentes_farmacologicos: patient.antecedentes_farmacologicos || 'No registra',
+        antecedentes_familiares: patient.antecedentes_familiares || 'No registra',
+        antecedentes_sociales: patient.antecedentes_sociales || 'No registra',
+        antecedentes_sincronizados: true,
+      }));
+    } catch {
+      setForm((prev) => ({ ...prev, antecedentes_sincronizados: false }));
+    }
+  };
+
+  const openCreate = () => {
+    setEditingHistory(null);
+    setForm(emptyForm);
+    setErrors({});
+    setModalOpen(true);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -67,12 +131,17 @@ export default function HistoryPage() {
       setErrors(fieldErrors);
       return;
     }
-    const existing = histories.find((h) => h.id_cita === form.id_cita);
-    if (existing) { toast.error('Ya existe una evolucion registrada para esta cita'); return; }
+    const existing = editingHistory ?? histories.find((h) => h.id_cita === form.id_cita);
     setSaving(true);
     try {
-      await historyService.create(result.data as ClinicalHistoryCreateDTO);
-      toast.success('Evolucion registrada exitosamente');
+      if (existing) {
+        await historyService.update(existing.id, result.data as ClinicalHistoryCreateDTO);
+        toast.success('Historia clinica actualizada exitosamente');
+      } else {
+        await historyService.create(result.data as ClinicalHistoryCreateDTO);
+        toast.success('Evolucion registrada exitosamente');
+      }
+      setEditingHistory(null);
       setModalOpen(false);
       loadData();
     } catch (err: any) {
@@ -158,16 +227,54 @@ export default function HistoryPage() {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nueva Evolucion" size="lg">
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <Select label="Cita *" value={form.id_cita || ''} onChange={(e) => updateField('id_cita', Number(e.target.value))} options={appointments.map((a) => ({ value: a.id, label: `#${a.id} - ${a.paciente_nombre || a.paciente || 'Paciente'} (${a.fecha?.split('T')[0]})` }))} error={errors.id_cita} />
+          <Select
+            label="Cita *"
+            value={form.id_cita || ''}
+            onChange={(e) => {
+              const appointmentId = Number(e.target.value);
+              updateField('id_cita', appointmentId);
+              hydrateBackgroundFromAppointment(appointmentId);
+            }}
+            options={appointments.map((a) => ({ value: a.id, label: `#${a.id} - ${a.paciente_nombre || a.paciente || 'Paciente'} (${a.fecha?.split('T')[0]})` }))}
+            error={errors.id_cita}
+          />
+          {editingHistory && (
+            <div className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700">
+              Esta cita ya tiene historia clínica. Al guardar se actualizará el registro existente.
+            </div>
+          )}
           <Select label="Diagnostico CIE10 *" value={form.id_cie || ''} onChange={(e) => updateField('id_cie', Number(e.target.value))} options={cie10List.map((c) => ({ value: c.id, label: `${c.codigo} - ${c.descripcion}` }))} error={errors.id_cie} />
-          <Textarea label="Evolucion *" value={form.evolucion} onChange={(e) => updateField('evolucion', e.target.value)} rows={5} placeholder="Describa la evolucion del paciente en esta sesion..." error={errors.evolucion} />
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="sync-antecedentes" checked={form.antecedentes_sincronizados || false} onChange={(e) => updateField('antecedentes_sincronizados', e.target.checked)} className="rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
-            <label htmlFor="sync-antecedentes" className="text-sm text-gray-700 font-medium">Sincronizar antecedentes del paciente</label>
+
+          <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+            <p className="mb-3 text-sm font-bold text-gray-800">Valoración y evolución de la sesión</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Textarea label="Subjetivo" value={form.subjetivo || ''} onChange={(e) => updateField('subjetivo', e.target.value)} rows={3} placeholder="Lo referido por el paciente..." />
+              <Textarea label="Objetivo" value={form.objetivo || ''} onChange={(e) => updateField('objetivo', e.target.value)} rows={3} placeholder="Hallazgos observables y mediciones..." />
+              <Textarea label="Intervención" value={form.intervencion || ''} onChange={(e) => updateField('intervencion', e.target.value)} rows={3} placeholder="Tratamiento realizado..." />
+              <Textarea label="Recomendaciones" value={form.recomendaciones || ''} onChange={(e) => updateField('recomendaciones', e.target.value)} rows={3} placeholder="Plan y recomendaciones..." />
+            </div>
+            <Textarea className="mt-3" label="Estado del paciente / evolución general" value={form.descripcion_estado_paciente || form.evolucion || ''} onChange={(e) => { updateField('descripcion_estado_paciente', e.target.value); updateField('evolucion', e.target.value); }} rows={4} placeholder="Resumen de evolución del paciente en esta sesión..." error={errors.evolucion} />
+          </div>
+
+          <div className="rounded-2xl border border-teal-100 bg-teal-50/40 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <input type="checkbox" id="sync-antecedentes" checked={form.antecedentes_sincronizados || false} onChange={(e) => updateField('antecedentes_sincronizados', e.target.checked)} className="rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
+              <label htmlFor="sync-antecedentes" className="text-sm font-bold text-gray-700">Antecedentes sincronizados/editables del paciente</label>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Textarea label="Antecedentes generales" value={form.antecedentes || ''} onChange={(e) => updateField('antecedentes', e.target.value)} rows={2} />
+              <Textarea label="Personales" value={form.antecedentes_personales || ''} onChange={(e) => updateField('antecedentes_personales', e.target.value)} rows={2} />
+              <Textarea label="Patológicos" value={form.antecedentes_patologicos || ''} onChange={(e) => updateField('antecedentes_patologicos', e.target.value)} rows={2} />
+              <Textarea label="Quirúrgicos" value={form.antecedentes_quirurgicos || ''} onChange={(e) => updateField('antecedentes_quirurgicos', e.target.value)} rows={2} />
+              <Textarea label="Traumáticos" value={form.antecedentes_traumaticos || ''} onChange={(e) => updateField('antecedentes_traumaticos', e.target.value)} rows={2} />
+              <Textarea label="Farmacológicos" value={form.antecedentes_farmacologicos || ''} onChange={(e) => updateField('antecedentes_farmacologicos', e.target.value)} rows={2} />
+              <Textarea label="Familiares" value={form.antecedentes_familiares || ''} onChange={(e) => updateField('antecedentes_familiares', e.target.value)} rows={2} />
+              <Textarea label="Sociales" value={form.antecedentes_sociales || ''} onChange={(e) => updateField('antecedentes_sociales', e.target.value)} rows={2} />
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button type="submit" isLoading={saving}>Registrar Evolucion</Button>
+            <Button type="submit" isLoading={saving}>{editingHistory ? 'Actualizar Historia' : 'Registrar Evolucion'}</Button>
           </div>
         </form>
       </Modal>

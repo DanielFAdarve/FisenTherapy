@@ -475,11 +475,18 @@ function normalizeClinicalHistory(data: any): ClinicalHistory {
 function normalizeClinicalHistoryPayload(data: Partial<ClinicalHistoryCreateDTO>) {
   const payload: Record<string, unknown> = { ...data };
   const evolucion = typeof payload.evolucion === 'string' ? payload.evolucion.trim() : '';
-  if (evolucion) {
-    if (!payload.descripcion_estado_paciente) payload.descripcion_estado_paciente = evolucion;
-    if (!payload.recomendaciones) payload.recomendaciones = evolucion;
-  }
-  delete payload.evolucion;
+  const clinicalSummary = [
+    payload.descripcion_estado_paciente ? `Estado: ${payload.descripcion_estado_paciente}` : '',
+    payload.subjetivo ? `Subjetivo: ${payload.subjetivo}` : '',
+    payload.objetivo ? `Objetivo: ${payload.objetivo}` : '',
+    payload.intervencion ? `Intervención: ${payload.intervencion}` : '',
+    payload.recomendaciones ? `Recomendaciones: ${payload.recomendaciones}` : '',
+  ].filter(Boolean).join('\n\n');
+
+  if (evolucion && !payload.descripcion_estado_paciente) payload.descripcion_estado_paciente = evolucion;
+  if (evolucion && !payload.recomendaciones) payload.recomendaciones = evolucion;
+  if (!evolucion && clinicalSummary) payload.evolucion = clinicalSummary;
+
   delete payload.antecedentes_sincronizados;
   return payload;
 }
