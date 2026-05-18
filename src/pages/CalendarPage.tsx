@@ -1,7 +1,7 @@
 // ============================================================
 // FISENT - CALENDARIO PAGE (Flujo completo por modales)
 // ============================================================
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   appointmentService, patientService, professionalService,
   packageService, paymentService, cie10Service,
@@ -93,6 +93,7 @@ export default function CalendarPage() {
   const [cies, setCies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const availabilityCache = useRef(new Map<string, Appointment[]>());
 
   const [state, setState] = useState<CalendarState>({
     step: 'closed', selectedDate: '', selectedHour: 8, selectedAppointment: null,
@@ -171,8 +172,21 @@ export default function CalendarPage() {
   };
 
   const patientHasActivePackages = (patientId: number): FisentPackage[] => {
-    return packages.filter(p => p.id_paciente === patientId && ((p.sesiones_disponibles ?? p.resumen_sesiones?.sesiones_disponibles ?? 0) > 0 || Boolean(p.tiene_cita_actual)));
+    return packages.filter(p =>
+      p.id_paciente === patientId &&
+      ((p.sesiones_disponibles ?? p.resumen_sesiones?.sesiones_disponibles ?? 0) > 0 || Boolean(p.tiene_cita_actual))
+    );
   };
+
+  const getAvailability = useCallback(async (professionalId: number, date: string) => {
+    const cacheKey = `${professionalId}:${date}`;
+    const cached = availabilityCache.current.get(cacheKey);
+    if (cached) return cached;
+
+    const dayAppointments = await appointmentService.checkAvailability(professionalId, date);
+    availabilityCache.current.set(cacheKey, dayAppointments);
+    return dayAppointments;
+  }, []);
 
   const updateCreateData = (field: string, value: any) => {
     setState(s => ({
@@ -275,11 +289,26 @@ export default function CalendarPage() {
       setPackages(current => [newPkg, ...current.filter(pkg => pkg.id !== newPkg.id)]);
       setState(s => ({
         ...s,
-        createData: { ...s.createData, id_paquete: newPkg.id },
+        createData: { ...s.createData, id_paquete: newPkg.id, id_profesional: newPkg.id_profesional || s.createData.id_profesional },
         step: 'create-step3-details',
       }));
     } catch (err: any) {
-      toast.error(err?.message || 'Error al crear paquete');
+      const fallbackPackages = await packageService.getAvailableByPatient(state.createData.id_paciente).catch(() => []);
+      if (fallbackPackages.length > 0) {
+        const activePackage = fallbackPackages[0];
+        setPackages(current => [
+          ...fallbackPackages,
+          ...current.filter(pkg => !fallbackPackages.some((fallback) => fallback.id === pkg.id)),
+        ]);
+        toast.success('Se seleccionó un paquete activo existente para continuar');
+        setState(s => ({
+          ...s,
+          createData: { ...s.createData, id_paquete: activePackage.id, id_profesional: activePackage.id_profesional || s.createData.id_profesional },
+          step: 'create-step3-details',
+        }));
+      } else {
+        toast.error(err?.message || 'Error al crear paquete');
+      }
     } finally { setSaving(false); }
   };
 
@@ -290,7 +319,7 @@ export default function CalendarPage() {
       return;
     }
     const pkg = packages.find(p => p.id === state.createData.id_paquete);
-    if (pkg && pkg.sesiones_realizadas >= pkg.cantidad_sesiones) {
+    if (pkg && (pkg.resumen_sesiones?.completo || pkg.sesiones_realizadas >= pkg.cantidad_sesiones) && !pkg.tiene_cita_actual) {
       toast.error('Este paquete ya tiene todas las sesiones consumidas');
       return;
     }
@@ -299,7 +328,7 @@ export default function CalendarPage() {
   };
 
   // Step 3 → Step 4: Validate details
-  const handleDetailsNext = () => {
+  const handleDetailsNext = async () => {
     const result = appointmentSchema.safeParse(state.createData);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -307,21 +336,42 @@ export default function CalendarPage() {
       setState(s => ({ ...s, errors: fieldErrors }));
       return;
     }
-    // Check collision
-    const collision = appointments.find((a) =>
-      a.id_profesional === state.createData.id_profesional &&
-      a.fecha.split('T')[0] === state.createData.fecha &&
-      a.estado !== 'CANCELADA' &&
-      a.horario_inicio < state.createData.horario_fin &&
-      a.horario_fin > state.createData.horario_inicio
-    );
-    if (collision) {
-      setState(s => ({
-        ...s,
-        collisionWarning: `Colision: cita con ${collision.paciente}  a las ${collision.horario_inicio}`,
-      }));
-      return;
+
+    setSaving(true);
+    try {
+      const dayAppointments = await getAvailability(state.createData.id_profesional, state.createData.fecha);
+      const collision = dayAppointments.find((a) =>
+        a.id !== state.selectedAppointment?.id &&
+        a.estado !== 'CANCELADA' &&
+        a.horario_inicio < state.createData.horario_fin &&
+        a.horario_fin > state.createData.horario_inicio
+      );
+      if (collision) {
+        setState(s => ({
+          ...s,
+          collisionWarning: `Colision: cita con ${collision.paciente || collision.paciente_nombre || 'otro paciente'} a las ${collision.horario_inicio}`,
+        }));
+        return;
+      }
+    } catch {
+      const collision = appointments.find((a) =>
+        a.id_profesional === state.createData.id_profesional &&
+        a.fecha.split('T')[0] === state.createData.fecha &&
+        a.estado !== 'CANCELADA' &&
+        a.horario_inicio < state.createData.horario_fin &&
+        a.horario_fin > state.createData.horario_inicio
+      );
+      if (collision) {
+        setState(s => ({
+          ...s,
+          collisionWarning: `Colision: cita con ${collision.paciente || collision.paciente_nombre || 'otro paciente'} a las ${collision.horario_inicio}`,
+        }));
+        return;
+      }
+    } finally {
+      setSaving(false);
     }
+
     setState(s => ({ ...s, collisionWarning: null }));
     goStep('create-step4-confirm');
   };
@@ -330,9 +380,10 @@ export default function CalendarPage() {
   const handleCreateConfirm = async () => {
     setSaving(true);
     try {
-      await appointmentService.create(state.createData as AppointmentCreateDTO);
+      const created = await appointmentService.create(state.createData as AppointmentCreateDTO);
+      availabilityCache.current.clear();
+      setAppointments(current => [created, ...current.filter((appointment) => appointment.id !== created.id)]);
       goStep('success');
-      loadData();
     } catch (err: any) {
       toast.error(err?.message || 'Error al crear cita');
     } finally { setSaving(false); }
@@ -368,6 +419,7 @@ export default function CalendarPage() {
     setSaving(true);
     try {
       await appointmentService.update({ id: state.selectedAppointment.id, ...state.createData as AppointmentCreateDTO });
+      availabilityCache.current.clear();
       goStep('success');
       loadData();
     } catch (err: any) {
@@ -383,6 +435,7 @@ export default function CalendarPage() {
     setSaving(true);
     try {
       await appointmentService.cancel(state.selectedAppointment.id);
+      availabilityCache.current.clear();
       goStep('success');
       loadData();
     } catch (err: any) {
@@ -799,7 +852,7 @@ export default function CalendarPage() {
               <Textarea label="Observaciones" value={state.createData.observaciones} onChange={(e) => updateCreateData('observaciones', e.target.value)} rows={2} />
               <div className="flex justify-between pt-4 border-t border-gray-100">
                 <Button variant="ghost" onClick={() => goStep('create-step2-package')}><ArrowLeft className="w-4 h-4 mr-1" />Atras</Button>
-                <Button onClick={handleDetailsNext}>Revisar <ArrowRight className="w-4 h-4 ml-1" /></Button>
+                <Button onClick={handleDetailsNext} isLoading={saving}>Revisar <ArrowRight className="w-4 h-4 ml-1" /></Button>
               </div>
             </div>
           </Modal>

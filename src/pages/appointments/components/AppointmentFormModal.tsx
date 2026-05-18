@@ -127,7 +127,7 @@ export function AppointmentFormModal({
           }}
           options={patientPackages.map((pkg) => ({
             value: pkg.id,
-            label: `${pkg.nombre} (${pkg.sesiones_realizadas}/${pkg.cantidad_sesiones} usadas · ${pkg.sesiones_disponibles ?? pkg.resumen_sesiones?.sesiones_disponibles ?? 0} disponibles)`,
+            label: `${pkg.nombre} (${pkg.sesiones_realizadas}/${pkg.cantidad_sesiones} usadas · ${pkg.sesiones_disponibles ?? pkg.resumen_sesiones?.sesiones_disponibles ?? 0} disponibles${pkg.tiene_cita_actual ? ' · cita actual' : ''})`,
           }))}
           error={errors.id_paquete}
         />
