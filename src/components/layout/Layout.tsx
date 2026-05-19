@@ -65,7 +65,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
         </div>
         {mobile && (
-          <button onClick={() => setMobileOpen(false)} className="p-2 rounded-xl hover:bg-white/10 text-white/60" aria-label="Cerrar menu">
+          <button onClick={() => setMobileOpen(false)} className="p-2 rounded-xl hover:bg-black/10 text-black/60" aria-label="Cerrar menu">
             <X className="w-5 h-5" />
           </button>
         )}
@@ -150,10 +150,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 if (window.innerWidth >= 1024) setSidebarOpen(!sidebarOpen);
                 else setMobileOpen(true);
               }}
-              className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-500"
+              className="p-2 rounded-xl color-red hover:bg-gray-100 transition-colors text-gray-500"
               aria-label="Menu"
             >
-              {sidebarOpen ? <ChevronLeft className="w-5 h-5 hidden lg:block" /> : <Menu className="w-5 h-5" />}
+              {sidebarOpen ? <Menu className="w-5 h-5  lg:block" /> : <Menu className="w-5 h-5" />}
             </button>
             <h2 className="text-sm font-bold text-gray-800 truncate max-w-[200px] md:max-w-none">
               {currentNav?.label || env.APP_NAME}

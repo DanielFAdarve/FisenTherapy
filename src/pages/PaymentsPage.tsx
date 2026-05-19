@@ -178,7 +178,7 @@ export default function PaymentsPage() {
           </div>
 
           {paymentType === 'PAQUETE' ? (
-            <Select label="Paquete *" value={form.id_paquete || ''} onChange={(e) => updateField('id_paquete', e.target.value ? Number(e.target.value) : null)} options={packages.map((p) => ({ value: p.id, label: `${p.nombre} - ${p.paciente?.nombres || ''}` }))} error={errors.id_paquete} />
+            <Select label="Paquete *" value={form.id_paquete || ''} onChange={(e) => updateField('id_paquete', e.target.value ? Number(e.target.value) : null)} options={packages.map((p) => ({ value: p.id, label: `${p.attentionPackage?.descripcion} - ${p.patient?.nombre || ''}` }))} error={errors.id_paquete} />
           ) : (
             <Select label="Cita *" value={form.id_cita || ''} onChange={(e) => updateField('id_cita', e.target.value ? Number(e.target.value) : null)} options={appointments.map((a) => ({ value: a.id, label: `#${a.id} - ${a.paciente?.nombres || ''} (${a.fecha?.split('T')[0]})` }))} error={errors.id_cita} />
           )}

@@ -13,7 +13,7 @@ import PatientsPage from './pages/patients/PatientsPage';
 import PackagesPage from './pages/PackagesPage';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import CalendarPage from './pages/CalendarPage';
-import HistoryPage from './pages/HistoryPage';
+import HistoryPage from './pages/history/HistoryPage';
 import PaymentsPage from './pages/PaymentsPage';
 import ProfessionalsPage from './pages/ProfessionalsPage';
 import Cie10Page from './pages/Cie10Page';

@@ -18,22 +18,7 @@ export const loginSchema = z.object({
   password: z.string().min(4, 'Contraseña mínimo 4 caracteres'),
 });
 
-// --- Paciente ---
-// export const patientSchema = z.object({
-//   tipo_doc: z.enum(['CC', 'TI', 'CE', 'PA', 'NIT'] as const, { message: 'Tipo de documento obligatorio' }),
-//   num_doc: z.string().min(4, 'Documento mínimo 4 caracteres').max(20, 'Documento máximo 20 caracteres'),
-//   nombres: z.string().min(2, 'Nombres obligatorios (mín. 2)').max(100),
-//   apellidos: z.string().min(2, 'Apellidos obligatorios (mín. 2)').max(100),
-//   fecha_nacimiento: z.string().refine((val) => {
-//     const d = new Date(val);
-//     return d instanceof Date && !isNaN(d.getTime()) && d < new Date();
-//   }, 'Fecha de nacimiento inválida o futura'),
-//   telefono: z.string().min(7, 'Teléfono mínimo 7 dígitos').max(15),
-//   email: z.union([z.string().email('Email inválido'), z.literal('')]).optional(),
-//   direccion: z.string().max(200).optional().or(z.literal('')),
-//   antecedentes: z.string().optional().default('Sin antecedentes registrados'),
-//   id_cie: z.number().nullable().optional(),
-// });
+
 export const patientSchema = z.object({
   tipo_doc: z.enum(['CC', 'TI', 'CE', 'PA', 'NIT'] as const, {
     message: 'Tipo de documento obligatorio',

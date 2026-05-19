@@ -28,7 +28,7 @@ function getBoolEnvVar(key: string, defaultValue: boolean = false): boolean {
 // --- Configuracion exportada ---
 export const env = {
   // API
-  API_URL: getEnvVar('VITE_API_URL', 'http://localhost:3000/api'),
+  API_URL: getEnvVar('VITE_API_URL', 'https://back-fisent.onrender.com/api'),
 
   // App
   APP_NAME: getEnvVar('VITE_APP_NAME', 'FisenT'),
