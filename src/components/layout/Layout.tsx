@@ -2,7 +2,7 @@
 // FISENT - LAYOUT (Responsive + Mobile Optimized)
 // ============================================================
 import { useState, ReactNode } from 'react';
-import { Link, useLocation, Navigate } from 'react-router-dom';
+import { Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import {
   Users, Package, Calendar, FileText, BookOpen, CreditCard, Stethoscope,
   LogOut, Menu, ChevronLeft, Activity, Home, BarChart3, CalendarDays, X,
@@ -46,6 +46,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const { state, logout } = useAuth();
+  const navigate = useNavigate(); 
+
+  const handleLogout = () => {
+    logout(); // Esto elimina el token
+    navigate('/login', { replace: true }); // Redirección inmediata
+  };
 
   const currentNav = navItems.find((n) => location.pathname === n.path || location.pathname.startsWith(n.path + '/'));
 
@@ -79,11 +85,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
                   ? 'bg-white/15 text-white shadow-lg shadow-black/10'
                   : 'text-teal-100/60 hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
               onClick={() => { if (mobile) setMobileOpen(false); }}
               aria-current={isActive ? 'page' : undefined}
             >
@@ -110,7 +115,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
           )}
           {(sidebarOpen || mobile) && (
-            <button onClick={logout} className="p-2 rounded-lg hover:bg-white/10 text-teal-200/60 hover:text-white transition-colors" aria-label="Cerrar sesion">
+            <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-white/10 text-teal-200/60 hover:text-white transition-colors" aria-label="Cerrar sesion">
               <LogOut className="w-4 h-4" />
             </button>
           )}
@@ -123,9 +128,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex h-screen bg-gray-50/80 overflow-hidden">
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden lg:flex flex-col bg-gradient-to-b from-slate-900 via-teal-900 to-slate-900 transition-all duration-300 ease-in-out flex-shrink-0 ${
-          sidebarOpen ? 'w-64' : 'w-20'
-        }`}
+        className={`hidden lg:flex flex-col bg-gradient-to-b from-slate-900 via-teal-900 to-slate-900 transition-all duration-300 ease-in-out flex-shrink-0 ${sidebarOpen ? 'w-64' : 'w-20'
+          }`}
       >
         <SidebarContent />
       </aside>
@@ -153,7 +157,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               className="p-2 rounded-xl color-red hover:bg-gray-100 transition-colors text-gray-500"
               aria-label="Menu"
             >
-              {sidebarOpen ? <Menu className="w-5 h-5  lg:block" /> : <Menu className="w-5 h-5" />}
+              {sidebarOpen ? <ChevronLeft className="w-5 h-5  lg:block" /> : <Menu className="w-5 h-5" />}
             </button>
             <h2 className="text-sm font-bold text-gray-800 truncate max-w-[200px] md:max-w-none">
               {currentNav?.label || env.APP_NAME}
@@ -166,7 +170,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </div>
               <span className="text-xs font-semibold text-gray-600 hidden lg:inline">{state.user?.nombre || state.user?.username}</span>
             </div>
-            <button onClick={logout} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500" aria-label="Cerrar sesion">
+            <button onClick={handleLogout} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500" aria-label="Cerrar sesion">
               <LogOut className="w-4 h-4 md:w-5 md:h-5" />
             </button>
           </div>
@@ -189,9 +193,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all min-w-[52px] ${
-                  isActive ? 'text-teal-600 bg-teal-50' : 'text-gray-400 hover:text-gray-600'
-                }`}
+                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all min-w-[52px] ${isActive ? 'text-teal-600 bg-teal-50' : 'text-gray-400 hover:text-gray-600'
+                  }`}
               >
                 <item.icon className="w-5 h-5" />
                 <span className="text-[10px] font-semibold">{item.shortLabel}</span>
