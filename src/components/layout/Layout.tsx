@@ -166,7 +166,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-2 md:gap-3">
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-xl">
               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-emerald-400 flex items-center justify-center text-white text-xs font-bold">
-                {state.user?.nombre?.charAt(0) || 'U'}
+                {state.user?.nombre?.charAt(0) || state.user?.username?.charAt(0) || 'U'}
               </div>
               <span className="text-xs font-semibold text-gray-600 hidden lg:inline">{state.user?.nombre || state.user?.username}</span>
             </div>
