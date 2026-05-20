@@ -131,10 +131,10 @@ export default function DashboardPage() {
             <CardHeader title="Acciones Rapidas" icon={<Activity className="w-5 h-5" />} />
             <div className="p-4 grid grid-cols-2 gap-2">
               {[
-                { label: 'Nuevo Paciente', path: '/patients', icon: Users, color: 'from-teal-500 to-emerald-500' },
-                { label: 'Agendar Cita', path: '/appointments', icon: Calendar, color: 'from-blue-500 to-sky-500' },
-                { label: 'Nuevo Paquete', path: '/packages', icon: Package, color: 'from-amber-500 to-orange-500' },
-                { label: 'Registrar Pago', path: '/payments', icon: CreditCard, color: 'from-purple-500 to-violet-500' },
+                { label: 'Nuevo Paciente', path: '#/patients', icon: Users, color: 'from-teal-500 to-emerald-500' },
+                { label: 'Agendar Cita', path: '#/appointments', icon: Calendar, color: 'from-blue-500 to-sky-500' },
+                { label: 'Nuevo Paquete', path: '#/packages', icon: Package, color: 'from-amber-500 to-orange-500' },
+                { label: 'Registrar Pago', path: '#/payments', icon: CreditCard, color: 'from-purple-500 to-violet-500' },
               ].map((action) => (
                 <a
                   key={action.label}
