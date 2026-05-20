@@ -6,6 +6,7 @@ import { Users, Package, Calendar, CreditCard, Clock, ArrowRight, Activity } fro
 import { Card, StatCard, Skeleton, CardHeader, Avatar, Badge, getStatusBadge } from '../components/ui/Components';
 import { patientService, appointmentService, reportService } from '../data-access/services';
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({ patients: 0, activePackages: 0, todayAppointments: 0, totalRevenue: 0 });
@@ -77,9 +78,9 @@ export default function DashboardPage() {
               subtitle={todayAppointments.length > 0 ? `${todayAppointments.length} citas programadas` : 'Sin citas hoy'}
               icon={<Clock className="w-5 h-5" />}
               action={
-                <a href="/appointments" className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors">
+                <Link to="/appointments" className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors">
                   Ver todas <ArrowRight className="w-3.5 h-3.5" />
-                </a>
+                </Link>
               }
             />
             {loading ? (
@@ -90,10 +91,10 @@ export default function DashboardPage() {
                   <Calendar className="w-8 h-8 text-gray-300" />
                 </div>
                 <p className="text-sm text-gray-400 font-medium">No hay citas programadas para hoy</p>
-                <a href="/appointments" className="inline-flex items-center gap-1.5 mt-4 text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors">
+                <Link to="/appointments" className="inline-flex items-center gap-1.5 mt-4 text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors">
                   <Calendar className="w-4 h-4" />
                   Agendar nueva cita
-                </a>
+                </Link>
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
@@ -131,21 +132,21 @@ export default function DashboardPage() {
             <CardHeader title="Acciones Rapidas" icon={<Activity className="w-5 h-5" />} />
             <div className="p-4 grid grid-cols-2 gap-2">
               {[
-                { label: 'Nuevo Paciente', path: '#/patients', icon: Users, color: 'from-teal-500 to-emerald-500' },
-                { label: 'Agendar Cita', path: '#/appointments', icon: Calendar, color: 'from-blue-500 to-sky-500' },
-                { label: 'Nuevo Paquete', path: '#/packages', icon: Package, color: 'from-amber-500 to-orange-500' },
-                { label: 'Registrar Pago', path: '#/payments', icon: CreditCard, color: 'from-purple-500 to-violet-500' },
+                { label: 'Nuevo Paciente', path: '/patients', icon: Users, color: 'from-teal-500 to-emerald-500' },
+                { label: 'Agendar Cita', path: '/appointments', icon: Calendar, color: 'from-blue-500 to-sky-500' },
+                { label: 'Nuevo Paquete', path: '/packages', icon: Package, color: 'from-amber-500 to-orange-500' },
+                { label: 'Registrar Pago', path: '/payments', icon: CreditCard, color: 'from-purple-500 to-violet-500' },
               ].map((action) => (
-                <a
+                <Link
                   key={action.label}
-                  href={action.path}
+                  to={action.path}
                   className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-gray-50 hover:bg-white hover:shadow-md border border-transparent hover:border-gray-200 transition-all duration-200 group"
                 >
                   <div className={`p-2.5 rounded-xl bg-gradient-to-br ${action.color} text-white shadow-sm group-hover:scale-110 transition-transform`}>
                     <action.icon className="w-5 h-5" />
                   </div>
                   <span className="text-xs font-semibold text-gray-600 text-center">{action.label}</span>
-                </a>
+                </Link>
               ))}
             </div>
           </Card>
@@ -156,9 +157,9 @@ export default function DashboardPage() {
               title="Pacientes Recientes"
               icon={<Users className="w-5 h-5" />}
               action={
-                <a href="/patients" className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors">
+                <Link to="/patients" className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors">
                   Ver todos <ArrowRight className="w-3.5 h-3.5" />
-                </a>
+                </Link>
               }
             />
             {loading ? (
