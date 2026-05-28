@@ -15,6 +15,7 @@ import {
     Textarea,
     Button,
 } from '../../../components/ui/Components';
+import { Cie10SearchField } from '../../../components/Cie10SearchField';
 
 import {
     Patient,
@@ -45,6 +46,8 @@ interface Props {
     saving: boolean;
 
     cie10List: Cie10[];
+
+    onCiesFound: (cies: Cie10[]) => void;
 
     onFieldChange: <
         K extends keyof PatientFormData
@@ -87,6 +90,7 @@ export function PatientFormModal({
     errors,
     saving,
     cie10List,
+    onCiesFound,
     onFieldChange,
     onSubmit,
 
@@ -481,21 +485,17 @@ export function PatientFormModal({
                                 options={RED_APOYO_OPTIONS}
                             />
 
-                            <Select
-                                label="Diagnóstico CIE10"
+                            <Cie10SearchField
+                                label="Diagnostico CIE10"
                                 value={form.id_cie || ''}
-                                onChange={(e) =>
+                                initialCie={cie10List.find((c) => c.id === form.id_cie) ?? null}
+                                onChange={(cieId) =>
                                     onFieldChange(
                                         'id_cie',
-                                        e.target.value
-                                            ? Number(e.target.value)
-                                            : null
+                                        cieId ? Number(cieId) : null
                                     )
                                 }
-                                options={cie10List.map((c) => ({
-                                    value: c.id,
-                                    label: `${c.codigo} - ${c.descripcion}`,
-                                }))}
+                                onResults={onCiesFound}
                             />
 
                         </div>

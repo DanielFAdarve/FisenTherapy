@@ -168,6 +168,16 @@ export default function PatientsPage() {
     } catch { }
   }, []);
 
+  const mergeCies = useCallback((foundCies: Cie10[]) => {
+    setCie10List((current) => {
+      const merged = [...current];
+      foundCies.forEach((cie) => {
+        if (!merged.some((item) => item.id === cie.id)) merged.push(cie);
+      });
+      return merged;
+    });
+  }, []);
+
   useEffect(() => {
     loadCie10();
   }, [loadCie10]);
@@ -457,6 +467,7 @@ export default function PatientsPage() {
         errors={errors}
         saving={saving}
         cie10List={cie10List}
+        onCiesFound={mergeCies}
         onFieldChange={updateField}
         onSubmit={handleSubmit}
       />
