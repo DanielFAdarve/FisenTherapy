@@ -25,6 +25,7 @@ import {
 import {
   Appointment,
   AppointmentCreateDTO,
+  Cie10,
   Package as FisentPackage,
   PaginationParams,
   Patient,
@@ -157,7 +158,7 @@ export default function AppointmentsPage() {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [packages, setPackages] = useState<FisentPackage[]>([]);
   const [packageCatalog, setPackageCatalog] = useState<FisentPackage[]>([]);
-  const [cies, setCies] = useState<any[]>([]);
+  const [cies, setCies] = useState<Cie10[]>([]);
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageError, setPackageError] = useState<string | null>(null);
   const [newPackage, setNewPackage] = useState({
@@ -331,6 +332,16 @@ export default function AppointmentsPage() {
     });
   }, []);
 
+  const mergeCies = useCallback((foundCies: Cie10[]) => {
+    setCies((current) => {
+      const merged = [...current];
+      foundCies.forEach((cie) => {
+        if (!merged.some((item) => item.id === cie.id)) merged.push(cie);
+      });
+      return merged;
+    });
+  }, []);
+
   const loadPackageCreationCatalogs = useCallback(async () => {
     if (packageCatalog.length > 0 && cies.length > 0) return;
     const [catalogResult, ciesResult] = await Promise.allSettled([
@@ -350,7 +361,7 @@ export default function AppointmentsPage() {
     setPackageError(null);
     try {
       const available = await packageService.getAvailableByPatient(patientId, quoteId);
-      const currentPackage = editingAppt ? getAppointmentPackage(editingAppt) : null;
+      const currentPackage = editingAppt ? getAppointmentPackage(editingAppt) ?? buildPackageFromAppointment(editingAppt) : null;
       const currentPackageId = editingAppt ? getAppointmentPackageId(editingAppt) : null;
       const packagesWithCurrent = currentPackage && currentPackageId && !(available || []).some((pkg) => pkg.id === currentPackageId)
         ? [
@@ -599,6 +610,7 @@ export default function AppointmentsPage() {
         onCreatePackage={handleCreatePackage}
         onFieldChange={updateField}
         onPatientsFound={mergePatients}
+        onCiesFound={mergeCies}
         onSubmit={handleSubmit}
       />
 

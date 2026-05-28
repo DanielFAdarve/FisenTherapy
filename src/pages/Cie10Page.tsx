@@ -1,39 +1,51 @@
 // ============================================================
 // FISENT - CIE10 PAGE (UI Mejorada)
 // ============================================================
-import { useState, useEffect, useCallback, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { cie10Service } from '../data-access/services';
 import { Cie10, Cie10CreateDTO } from '../domain/models';
 import { cie10Schema, Cie10FormData } from '../domain/schemas';
 import {
-  Card, Button, Input, Textarea, Modal, TableSkeleton, EmptyState, PageHeader, SearchInput,
+  Card, Button, Input, Textarea, Modal, TableSkeleton, EmptyState, PageHeader, SearchInput, PaginationControls,
 } from '../components/ui/Components';
 import { BookOpen, Plus, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { usePaginatedResource } from '../hooks/usePaginatedResource';
 
 const emptyForm: Cie10FormData = { codigo: '', descripcion: '' };
 
 export default function Cie10Page() {
-  const [cie10List, setCie10List] = useState<Cie10[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const {
+    data: cie10List,
+    pagination,
+    loading,
+    error,
+    page,
+    limit,
+    search,
+    setPage,
+    setLimit,
+    setSearch,
+    refresh: loadCie10,
+  } = usePaginatedResource<Cie10>({
+    fetcher: cie10Service.getPaginated,
+    paramPrefix: 'cie10_',
+  });
+  const [searchInput, setSearchInput] = useState(search);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Cie10 | null>(null);
   const [form, setForm] = useState<Cie10FormData>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  const loadCie10 = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await cie10Service.getAll(search);
-      setCie10List(data || []);
-    } catch (err: any) {
-      toast.error(err?.message || 'Error al cargar CIE10');
-    } finally { setLoading(false); }
-  }, [search]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput);
+    }, 350);
 
-  useEffect(() => { loadCie10(); }, [loadCie10]);
+    return () => window.clearTimeout(timeout);
+  }, [searchInput, setPage, setSearch]);
 
   const openCreate = () => { setEditingItem(null); setForm(emptyForm); setErrors({}); setModalOpen(true); };
   const openEdit = (item: Cie10) => { setEditingItem(item); setForm({ codigo: item.codigo, descripcion: item.descripcion }); setErrors({}); setModalOpen(true); };
@@ -73,13 +85,14 @@ export default function Cie10Page() {
       <PageHeader
         icon={<BookOpen className="w-6 h-6" />}
         title="Catalogo CIE10"
-        subtitle={`${cie10List.length} diagnosticos registrados`}
+        subtitle={`${pagination?.total ?? cie10List.length} diagnosticos registrados`}
         action={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />Nuevo Diagnostico</Button>}
       />
 
       <Card>
         <div className="p-4">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar por codigo o descripcion..." />
+          <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Buscar por codigo o descripcion..." />
+          {error && <p className="mt-2 text-xs font-medium text-red-600">{error}</p>}
         </div>
       </Card>
 
@@ -126,6 +139,19 @@ export default function Cie10Page() {
               </tbody>
             </table>
           </div>
+          {pagination && (
+            <PaginationControls
+              page={page}
+              limit={limit}
+              total={pagination.total}
+              totalPages={pagination.totalPages}
+              hasNextPage={pagination.hasNextPage}
+              hasPreviousPage={pagination.hasPreviousPage}
+              onPageChange={setPage}
+              onLimitChange={setLimit}
+              isLoading={loading}
+            />
+          )}
         </Card>
       )}
 

@@ -10,6 +10,7 @@ import {
   EmptyState, PageHeader, SearchInput, ProgressBar, ConfirmDialog,
 } from '../components/ui/Components';
 import { PatientSearchField } from '../components/PatientSearchField';
+import { Cie10SearchField } from '../components/Cie10SearchField';
 import { Package, Plus, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -142,6 +143,16 @@ export default function PackagesPage() {
     });
   }, []);
 
+  const mergeCies = useCallback((foundCies: Cie10[]) => {
+    setCies((current) => {
+      const merged = [...current];
+      foundCies.forEach((cie) => {
+        if (!merged.some((item) => item.id === cie.id)) merged.push(cie);
+      });
+      return merged;
+    });
+  }, []);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -235,11 +246,12 @@ export default function PackagesPage() {
             options={professionals.filter(p => p.estado).map((p) => ({ value: p.id, label: `${p.nombre} ${p.apellido} - ${p.especialidad}` }))}
             error={errors.id_profesional}
           />
-          <Select
+          <Cie10SearchField
             label="CIE secundario"
             value={form.id_cie_secundario || ''}
-            onChange={(e) => updateField('id_cie_secundario', e.target.value ? Number(e.target.value) : null)}
-            options={cies.map((cie) => ({ value: cie.id, label: `${cie.codigo} - ${cie.descripcion}` }))}
+            initialCie={cies.find((cie) => cie.id === form.id_cie_secundario) ?? null}
+            onChange={(cieId) => updateField('id_cie_secundario', cieId ? Number(cieId) : null)}
+            onResults={mergeCies}
             error={errors.id_cie_secundario}
           />
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
