@@ -76,12 +76,15 @@ export function Cie10SearchField({
   }, [onResults, open, options, selectedCie?.id, value]);
 
   useEffect(() => {
-    if (!open && !touched) return;
+    if (!open || !touched) return;
+
+    const searchTerm = query.trim();
+    if (searchTerm.length === 1) return;
 
     const requestId = ++requestIdRef.current;
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      cie10Service.getAll(query, 1, 20)
+      cie10Service.getAll(searchTerm || undefined, 1, searchTerm ? 20 : 8)
         .then((cies) => {
           if (requestId !== requestIdRef.current) return;
           const activeCies = (cies || []).filter((cie) => cie.estado !== false);
@@ -99,12 +102,13 @@ export function Cie10SearchField({
         .finally(() => {
           if (requestId === requestIdRef.current) setLoading(false);
         });
-    }, query.trim() ? 350 : 0);
+    }, searchTerm ? 350 : 0);
 
     return () => window.clearTimeout(timeout);
   }, [onResults, open, query, selectedCie, touched, value]);
 
   const visibleOptions = options.filter((cie) => cie.estado !== false);
+  const showOptions = open && !disabled && query.trim().length !== 1;
 
   const selectCie = (cie: Cie10) => {
     setSelectedCie(cie);
@@ -136,7 +140,7 @@ export function Cie10SearchField({
           onFocus={() => {
             setTouched(true);
             setOpen(true);
-            setQuery(selectedCie ? cieLabel(selectedCie) : query);
+            setQuery('');
           }}
           onChange={(event) => {
             setTouched(true);
@@ -167,7 +171,7 @@ export function Cie10SearchField({
         )}
       </div>
       {error && <p className="mt-1.5 text-xs font-medium text-red-600" role="alert">{error}</p>}
-      {open && !disabled && (
+      {showOptions && (
         <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
           {loading && <div className="px-3 py-2 text-sm text-gray-500">Buscando CIE10...</div>}
           {!loading && visibleOptions.length === 0 && (
