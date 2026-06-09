@@ -440,15 +440,18 @@ export function PatientFormModal({
                                 }
                             />
 
-                            <Input
+                            <Select
                                 label="Régimen"
                                 value={form.regimen || ''}
                                 onChange={(e) =>
-                                    onFieldChange(
-                                        'regimen',
-                                        e.target.value
-                                    )
+                                    onFieldChange('regimen', e.target.value)
                                 }
+                                options={[
+                                    { value: 'SUBSIDIADO', label: 'Subsidiado' },
+                                    { value: 'CONTRIBUTIVO', label: 'Contributivo' },
+                                    { value: 'ESPECIAL', label: 'Especial' },
+                                    { value: 'NO APLICA', label: 'No Aplica' },
+                                ]}
                             />
 
                             <Input
