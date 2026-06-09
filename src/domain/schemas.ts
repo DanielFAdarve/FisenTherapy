@@ -184,11 +184,7 @@ export const appointmentSchema = z.object({
     'Horario inválido (HH:MM)'
   ),
   observaciones: z.string().max(500).optional().or(z.literal('')),
-}).refine((data) => {
-  const start = data.horario_inicio;
-  const end = data.horario_fin;
-  return end > start;
-}, { message: 'Horario fin debe ser posterior a inicio', path: ['horario_fin'] });
+});
 
 // --- Historia Clínica ---
 export const clinicalHistorySchema = z.object({
