@@ -7,6 +7,7 @@ import { Card, StatCard, Skeleton, CardHeader, Avatar, Badge, getStatusBadge } f
 import { patientService, appointmentService, reportService } from '../data-access/services';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { es } from 'date-fns/locale';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({ patients: 0, activePackages: 0, todayAppointments: 0, totalRevenue: 0 });
@@ -48,7 +49,7 @@ export default function DashboardPage() {
         <div className="relative z-10">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Bienvenido a FisenT</h1>
           <p className="text-teal-100/80 mt-2 text-sm md:text-base">
-            {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy")} - Resumen del dia
+            {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })} - Resumen del dia
           </p>
         </div>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
