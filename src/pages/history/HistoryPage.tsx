@@ -41,15 +41,37 @@ export default function HistoryPage() {
     setAppointments((current) => [appointment, ...current.filter((item) => item.id !== appointment.id)]);
   }, []);
 
+  const mergeCies = useCallback((foundCies: Cie10[]) => {
+    setCie10List((current) => {
+      const merged = [...current];
+      foundCies.forEach((cie) => {
+        if (!merged.some((item) => item.id === cie.id)) merged.push(cie);
+      });
+      return merged;
+    });
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [appts, cies] = await Promise.all([
-        selectedPatient ? appointmentService.getAll(undefined, undefined, Number(selectedPatient), 1, 100).catch(() => []) : Promise.resolve([]),
+        appointmentService.getAll(undefined, undefined, selectedPatient ? Number(selectedPatient) : undefined, 1, 100).catch(() => []),
         cie10Service.getAll(undefined, 1, 100).catch(() => []),
       ]);
-      setAppointments(appts || []);
-      setCie10List(cies || []);
+      setAppointments((current) => {
+        const merged = [...(appts || [])];
+        current.forEach((appointment) => {
+          if (!merged.some((item) => item.id === appointment.id)) merged.unshift(appointment);
+        });
+        return merged;
+      });
+      setCie10List((current) => {
+        const merged = [...(cies || [])];
+        current.forEach((cie) => {
+          if (!merged.some((item) => item.id === cie.id)) merged.push(cie);
+        });
+        return merged;
+      });
       if (selectedPatient) {
         const hists = await historyService.getByPatient(Number(selectedPatient), { page: 1, limit: 50 }).catch(() => []);
         setHistories(hists || []);
@@ -73,7 +95,8 @@ export default function HistoryPage() {
       .then((context) => {
         setQuoteContext(context);
         mergeAppointment(context.cita);
-        if (context.paciente) {
+        mergeCies([context.cie10_historia, context.cie10_paciente].filter(Boolean) as Cie10[]);
+        if (context.paciente?.id) {
           mergePatients([context.paciente]);
           setSelectedPatient(context.paciente.id);
         } else if (context.cita?.id_paciente) {
@@ -83,7 +106,7 @@ export default function HistoryPage() {
         setModalOpen(true);
       })
       .catch(() => toast.error('No se pudo cargar la cita para historia clínica'));
-  }, [quoteParam, mergeAppointment, mergePatients]);
+  }, [quoteParam, mergeAppointment, mergePatients, mergeCies]);
 
   const openCreate = () => {
     setEditingHistory(null);
@@ -187,6 +210,7 @@ export default function HistoryPage() {
         patients={patients}
         mergePatients={mergePatients}
         mergeAppointment={mergeAppointment}
+        mergeCies={mergeCies}
         onSave={handleSave}
       />
     </div>

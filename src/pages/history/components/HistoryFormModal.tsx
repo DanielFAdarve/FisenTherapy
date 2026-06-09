@@ -1,15 +1,16 @@
 // ============================================================
 // components/history/HistoryFormModal.tsx
 // ============================================================
-import { useState, useEffect, FormEvent, useCallback } from 'react';
+import { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
 import { ClinicalHistory, Appointment, Cie10, Patient, HistoryQuoteContext } from '../../../domain/models';
 import { clinicalHistorySchema, ClinicalHistoryFormData } from '../../../domain/schemas';
 import { historyService, patientService, appointmentService } from '../../../data-access/services';
-import { Modal, Button, Select, Textarea, Alert } from '../../../components/ui/Components';
+import { Modal, Button, Textarea, Alert, Badge } from '../../../components/ui/Components';
 import { AntecedentsSection } from './AntecedentsSection';
-import { HistoryFormPreview } from './HistoryFormPreview';
-import { Eye, Download } from 'lucide-react';
+import { Cie10SearchField } from '../../../components/Cie10SearchField';
 import toast from 'react-hot-toast';
+import { Download, Search } from 'lucide-react';
+import { AppointmentSearchModal } from './AppointmentSearchModal';
 
 interface HistoryFormModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ interface HistoryFormModalProps {
   patients: Patient[];
   mergePatients: (patients: Patient[]) => void;
   mergeAppointment: (appointment?: Appointment | null) => void;
+  mergeCies: (cies: Cie10[]) => void;
   onSave: (saved: ClinicalHistory) => void;
 }
 
@@ -93,26 +95,62 @@ export function HistoryFormModal({
   patients,
   mergePatients,
   mergeAppointment,
+  mergeCies,
   onSave,
 }: HistoryFormModalProps) {
   const [form, setForm] = useState<ClinicalHistoryFormData>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [loadingBackground, setLoadingBackground] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [loadedHistory, setLoadedHistory] = useState<ClinicalHistory | null>(null);
+  const [appointmentQuery, setAppointmentQuery] = useState('');
+  const [appointmentPickerOpen, setAppointmentPickerOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [appointmentSearchOpen, setAppointmentSearchOpen] = useState(false);
+  const initKeyRef = useRef('');
+  const activeHistory = editingHistory ?? loadedHistory;
+  const [selectedAppointmentState, setSelectedAppointmentState] = useState<Appointment | null>(null);
 
   // Inicializar formulario al abrir
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initKeyRef.current = '';
+      return;
+    }
+
+    const initKey = editingHistory
+      ? `edit:${editingHistory.id}`
+      : quoteContext?.cita?.id
+        ? `quote:${quoteContext.cita.id}:${quoteContext.historia?.id ?? 'new'}`
+        : 'create';
+
+    if (initKeyRef.current === initKey) return;
+    initKeyRef.current = initKey;
 
     const init = async () => {
+      setSelectedAppointmentState(null);
+      setLoadedHistory(null);
+      setAppointmentQuery('');
+      setAppointmentPickerOpen(false);
+      // setLoadedHistory(null);
+      // setAppointmentQuery('');
+      // setAppointmentPickerOpen(!editingHistory && !quoteContext?.cita);
+
       if (editingHistory) {
-        // Modo edición: cargar datos del historial
         setForm(historyToForm(editingHistory));
 
-        // Cargar antecedentes frescos del paciente asociado a la cita
-        const appointment = appointments.find(a => a.id === editingHistory.id_cita);
-        const patientId = appointment?.id_paciente;
+        let fullAppointment: Appointment | null = editingHistory.cita ?? editingHistory.Quotes ?? null;
+        try {
+          fullAppointment = await appointmentService.getById(editingHistory.id_cita);
+        } catch { }
+        mergeAppointment(fullAppointment);
+        setSelectedAppointmentState(fullAppointment);
+
+        if (editingHistory.cie10) mergeCies([editingHistory.cie10]);
+        if (editingHistory.Cie10) mergeCies([editingHistory.Cie10]);
+
+        // Usar la cita completa para obtener el paciente y cargar antecedentes
+        const patientId = fullAppointment?.id_paciente;
         if (patientId) {
           const patient = patients.find(p => p.id === patientId) ?? await patientService.getById(patientId).catch(() => null);
           if (patient) {
@@ -123,9 +161,14 @@ export function HistoryFormModal({
             }));
           }
         }
+        setSelectedAppointmentState(fullAppointment);
       } else if (quoteContext) {
         // Modo creación desde contexto de cita (URL)
         const ctx = quoteContext;
+        mergeAppointment(ctx.cita);
+        setSelectedAppointmentState(ctx.cita);
+        if (ctx.cie10_historia) mergeCies([ctx.cie10_historia]);
+        if (ctx.cie10_paciente) mergeCies([ctx.cie10_paciente]);
         const initialForm: ClinicalHistoryFormData = {
           ...emptyForm,
           id_cita: ctx.cita?.id ?? 0,
@@ -133,7 +176,9 @@ export function HistoryFormModal({
           ...(ctx.historia ? historyToForm(ctx.historia) : patientBackgroundToForm(ctx.paciente)),
           antecedentes_sincronizados: Boolean(ctx.paciente),
         };
+        if (ctx.historia) setLoadedHistory(ctx.historia);
         setForm(initialForm);
+        setSelectedAppointmentState(ctx.cita ?? null);
       } else {
         // Modo creación manual
         setForm(emptyForm);
@@ -142,7 +187,7 @@ export function HistoryFormModal({
     };
 
     init();
-  }, [isOpen, editingHistory, quoteContext, appointments, patients, mergePatients]);
+  }, [isOpen, editingHistory, quoteContext, appointments, patients, mergePatients, mergeAppointment, mergeCies]);
 
   const updateField = (field: string, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -156,12 +201,16 @@ export function HistoryFormModal({
       const context = await historyService.getQuoteContext(appointmentId);
       mergeAppointment(context.cita);
       if (context.paciente) mergePatients([context.paciente]);
+      if (context.cie10_historia) mergeCies([context.cie10_historia]);
+      if (context.cie10_paciente) mergeCies([context.cie10_paciente]);
 
       if (context.historia) {
         // Ya existe historia: cargar formulario completo de esa historia
+        setLoadedHistory(context.historia);
         setForm(historyToForm(context.historia));
       } else {
         // Sin historia, precargar antecedentes y diagnóstico del paciente
+        setLoadedHistory(null);
         setForm(prev => ({
           ...prev,
           id_cita: appointmentId,
@@ -191,7 +240,7 @@ export function HistoryFormModal({
     } finally {
       setLoadingBackground(false);
     }
-  }, [appointments, mergeAppointment, mergePatients]);
+  }, [appointments, mergeAppointment, mergePatients, mergeCies]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -207,10 +256,10 @@ export function HistoryFormModal({
     setSaving(true);
     try {
       const dto = result.data;
-      const saved = editingHistory
-        ? await historyService.update(editingHistory.id, dto)
+      const saved = activeHistory
+        ? await historyService.update(activeHistory.id, dto)
         : await historyService.create(dto);
-      toast.success(editingHistory ? 'Historia actualizada' : 'Evolución registrada');
+      toast.success(activeHistory ? 'Historia actualizada' : 'Evolución registrada');
       onSave(saved);
     } catch (err: any) {
       toast.error(err?.message || 'Error al guardar');
@@ -219,10 +268,69 @@ export function HistoryFormModal({
     }
   };
 
-  const selectedAppointment = appointments.find(a => a.id === form.id_cita);
+  const handleExport = async () => {
+    if (!activeHistory?.id) return;
+    setExporting(true);
+    try {
+      const blob = await historyService.exportDocument(activeHistory.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `historia-clinica-${activeHistory.id}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Documento DOCX generado');
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo generar el DOCX');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+
+  const filteredAppointments = useMemo(() => {
+    const normalizedQuery = appointmentQuery.trim().toLowerCase();
+    if (!normalizedQuery) return appointments.slice(0, 8);
+    return appointments.filter((appointment) => {
+      const label = [
+        appointment.id,
+        appointment.paciente_nombre,
+        appointment.paciente,
+        appointment.num_doc_paciente,
+        appointment.profesional_nombre,
+        appointment.profesional,
+        appointment.fecha,
+        appointment.motivo,
+        appointment.observaciones,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return label.includes(normalizedQuery);
+    }).slice(0, 12);
+  }, [appointmentQuery, appointments]);
+
+  // const selectAppointment = (appointmentId: number) => {
+  //   updateField('id_cita', appointmentId);
+  //   setAppointmentPickerOpen(false);
+  //   if (!editingHistory) hydrateBackgroundFromAppointment(appointmentId);
+  // };
+
+  const selectedAppointment = selectedAppointmentState;
+  // appointments.find(a => a.id === form.id_cita)
+  //   ?? quoteContext?.cita
+  //   ?? editingHistory?.cita
+  //   ?? editingHistory?.Quotes
+  //   ?? loadedHistory?.cita
+  //   ?? loadedHistory?.Quotes
+  //   ?? null;
+
+  // Pre-cargar filtros para el modal de búsqueda
+  const selectedPatientId = selectedAppointment?.id_paciente ?? undefined;
+  const selectedProfessionalId = selectedAppointment?.id_profesional ?? undefined;
+
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editingHistory ? 'Editar Historia Clínica' : 'Nueva Evolución'} size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={activeHistory ? 'Editar Historia Clínica' : 'Nueva Evolución'} size="xl">
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         {quoteContext && (
           <Alert
@@ -232,35 +340,42 @@ export function HistoryFormModal({
           />
         )}
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid grid-cols-1 gap-4">
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Select
-                label="Cita *"
-                value={form.id_cita || ''}
-                onChange={(e) => {
-                  const id = Number(e.target.value);
-                  updateField('id_cita', id);
-                  // Solo precargar antecedentes si NO estamos editando (para no sobrescribir)
-                  if (!editingHistory) {
-                    hydrateBackgroundFromAppointment(id);
-                  }
-                }}
-                options={appointments.map(a => ({ value: a.id, label: appointmentLabel(a) }))}
-                error={errors.id_cita}
-              />
-              <Select
-                label="Diagnóstico CIE10 *"
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Cita *</label>
+                {selectedAppointment ? (
+                  <div className="flex items-center gap-2 p-2 bg-teal-50 rounded-lg border border-teal-200">
+                    <div className="flex-1">
+                      <p className="font-bold text-teal-900">#{selectedAppointment.id} - {selectedAppointment.paciente}-  {selectedAppointment.num_doc_paciente}</p>
+                      <p className="text-xs text-teal-700">{selectedAppointment.fecha} {selectedAppointment.horario_inicio?.slice(0, 5)}</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setAppointmentSearchOpen(true)}>Cambiar</Button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" onClick={() => setAppointmentSearchOpen(true)} className="w-full">
+                    <Search className="w-4 h-4 mr-2" /> Buscar cita
+                  </Button>
+                )}
+                {errors.id_cita && <p className="mt-1.5 text-xs font-medium text-red-600" role="alert">{errors.id_cita}</p>}
+              </div>
+              <Cie10SearchField
+                label="Diagnostico CIE10 *"
                 value={form.id_cie || ''}
-                onChange={(e) => updateField('id_cie', Number(e.target.value))}
-                options={cie10List.map(c => ({ value: c.id, label: `${c.codigo} - ${c.descripcion}` }))}
+                initialCie={cie10List.find(c => c.id === form.id_cie) ?? quoteContext?.cie10_historia ?? quoteContext?.cie10_paciente ?? null}
+                onChange={(cieId) => updateField('id_cie', cieId ? Number(cieId) : 0)}
+                onResults={mergeCies}
                 error={errors.id_cie}
               />
             </div>
 
             {selectedAppointment && (
               <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-4 text-sm text-teal-900">
-                <p className="font-bold">Cita #{selectedAppointment.id} · {selectedAppointment.fecha?.split('T')[0]} {selectedAppointment.horario_inicio?.slice(0, 5)}</p>
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <p className="font-bold">Cita #{selectedAppointment.id} - {selectedAppointment.fecha?.split('T')[0]} {selectedAppointment.horario_inicio?.slice(0, 5)}</p>
+                  {activeHistory && <Badge variant="info">Historia existente</Badge>}
+                </div>
                 <p>{selectedAppointment.paciente_nombre || selectedAppointment.paciente || 'Paciente'} · {selectedAppointment.profesional_nombre || selectedAppointment.profesional || 'Profesional'}</p>
                 <p>{selectedAppointment.tipo_paquete || selectedAppointment.package?.nombre || selectedAppointment.paquete?.nombre || 'Paquete asociado'} · Sesión #{selectedAppointment.numero_sesion || '--'}</p>
               </div>
@@ -294,45 +409,34 @@ export function HistoryFormModal({
               loading={loadingBackground}
             />
           </div>
-
-          <aside className="space-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="font-bold text-gray-800">Previsualización</p>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setPreviewOpen(!previewOpen)}>
-                <Eye className="mr-1 h-3.5 w-3.5" />{previewOpen ? 'Ocultar' : 'Ver'}
-              </Button>
-            </div>
-            <p className="text-xs text-gray-400">Vista rápida del DOCX. Descarga real tras guardar.</p>
-            {previewOpen && (
-              <HistoryFormPreview form={form} cie10List={cie10List} />
-            )}
-            {editingHistory && (
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={() => historyService.exportDocument(editingHistory.id)
-                  .then(blob => {
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `historia-${editingHistory.id}.docx`;
-                    link.click();
-                    URL.revokeObjectURL(url);
-                  })
-                  .catch(() => toast.error('No se pudo generar el DOCX'))}
-              >
-                <Download className="mr-2 h-4 w-4" />Generar DOCX
-              </Button>
-            )}
-          </aside>
         </div>
 
         <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" isLoading={saving}>{editingHistory ? 'Actualizar Historia' : 'Registrar Evolución'}</Button>
+          {activeHistory?.id && (
+            <Button type="button" variant="outline" onClick={handleExport} isLoading={exporting}>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar DOCX
+            </Button>
+          )}
+          <Button type="submit" isLoading={saving}>{activeHistory ? 'Actualizar Historia' : 'Registrar Evolución'}</Button>
         </div>
       </form>
+
+      {/* ✅ Ahora SÍ está dentro del Modal pero fuera del form */}
+      <AppointmentSearchModal
+        isOpen={appointmentSearchOpen}
+        onClose={() => setAppointmentSearchOpen(false)}
+        onSelect={(appointment) => {
+          mergeAppointment(appointment);
+          setSelectedAppointmentState(appointment); 
+          updateField('id_cita', appointment.id);
+          if (!editingHistory) hydrateBackgroundFromAppointment(appointment.id);
+          setAppointmentSearchOpen(false);
+        }}
+        defaultPatientId={selectedPatientId}
+        defaultProfessionalId={selectedProfessionalId}
+      />
     </Modal>
   );
 }

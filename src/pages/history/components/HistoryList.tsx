@@ -25,6 +25,12 @@ export function HistoryList({ histories, exportingId, onEdit, onDownload }: Hist
                 <p className="text-sm text-gray-400 mt-0.5">
                   CIE10: {h.cie10?.codigo || h.Cie10?.codigo || '--'} - {h.cie10?.descripcion || h.Cie10?.descripcion || 'Sin diagnóstico'}
                 </p>
+                {/* 🔽 NUEVA LÍNEA: Paquete y sesión */}
+                {h.id_cita && (h.cita?.tipo_paquete || h.cita?.package?.nombre || h.cita?.paquete?.nombre) && (
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Paquete: {h.cita?.tipo_paquete || h.cita?.package?.nombre || h.cita?.paquete?.nombre} · Sesión {h.cita?.numero_sesion || '--'}
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {h.antecedentes_sincronizados && <Badge variant="info">Antecedentes sync</Badge>}
