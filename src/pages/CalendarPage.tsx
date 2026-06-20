@@ -9,7 +9,7 @@ import {
 } from '../data-access/services';
 import {
   Appointment, AppointmentCreateDTO, Patient, Professional,
-  Package as FisentPackage, PackageCreateDTO,
+  Package as FisentPackage, PackageCreateDTO, Cie10,
   PaymentCreateDTO, PaymentMethod,
 } from '../domain/models';
 import { appointmentSchema, packageSchema } from '../domain/schemas';
@@ -18,6 +18,7 @@ import {
   Avatar, ProgressBar,
 } from '../components/ui/Components';
 import { PatientSearchField } from '../components/PatientSearchField';
+import { Cie10SearchField } from '../components/Cie10SearchField';
 import {
   ChevronLeft, ChevronRight, Calendar, Plus, XCircle, Edit2,
   CreditCard, Package, CheckCircle, ArrowRight, ArrowLeft, AlertTriangle, DollarSign, FileText,
@@ -103,7 +104,7 @@ export default function CalendarPage() {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [packages, setPackages] = useState<FisentPackage[]>([]);
   const [packageCatalog, setPackageCatalog] = useState<FisentPackage[]>([]);
-  const [cies, setCies] = useState<any[]>([]);
+  const [cies, setCies] = useState<Cie10[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const availabilityCache = useRef(new Map<string, Appointment[]>());
@@ -281,6 +282,16 @@ export default function CalendarPage() {
       const merged = [...current];
       foundPatients.forEach((patient) => {
         if (!merged.some((item) => item.id === patient.id)) merged.push(patient);
+      });
+      return merged;
+    });
+  }, []);
+
+  const mergeCies = useCallback((foundCies: Cie10[]) => {
+    setCies((current) => {
+      const merged = [...current];
+      foundCies.forEach((cie) => {
+        if (!merged.some((item) => item.id === cie.id)) merged.push(cie);
       });
       return merged;
     });
@@ -967,7 +978,13 @@ export default function CalendarPage() {
                 error={state.errors.id_profesional} />
               <Button variant="ghost" onClick={loadPackageCreationCatalogs}>Cargar catálogo de paquetes y CIE10</Button>
               <Select label="Tipo de Paquete *" value={state.newPackageData.id_paquetes_atenciones || ''} onChange={(e) => updateNewPackage('id_paquetes_atenciones', Number(e.target.value))} options={packageCatalog.map((p) => ({ value: p.id, label: `${p.descripcion || p.nombre} (${p.cantidad_sesiones} sesiones)` }))} />
-              <Select label="CIE secundario" value={state.newPackageData.id_cie_secundario || ''} onChange={(e) => updateNewPackage('id_cie_secundario', Number(e.target.value))} options={cies.map((cie) => ({ value: cie.id, label: `${cie.codigo} - ${cie.descripcion}` }))} />
+              <Cie10SearchField
+                label="CIE secundario"
+                value={state.newPackageData.id_cie_secundario || ''}
+                initialCie={cies.find((cie) => cie.id === state.newPackageData.id_cie_secundario) ?? null}
+                onChange={(cieId) => updateNewPackage('id_cie_secundario', cieId ? Number(cieId) : 0)}
+                onResults={mergeCies}
+              />
               <div className="flex justify-between pt-4 border-t border-gray-100">
                 <Button variant="ghost" onClick={() => activePkgs.length > 0 ? goStep('create-step2-package') : goStep('create-step1-patient')}>
                   <ArrowLeft className="w-4 h-4 mr-1" />Atras
@@ -1195,8 +1212,8 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="flex items-center gap-1">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="flex items-center justify-between gap-1 sm:justify-start">
             <button onClick={goPrev} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500"><ChevronLeft className="w-5 h-5" /></button>
             <Button variant="secondary" size="sm" onClick={goToday} className="font-bold text-xs">Hoy</Button>
             <button onClick={goNext} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500"><ChevronRight className="w-5 h-5" /></button>
@@ -1211,9 +1228,9 @@ export default function CalendarPage() {
                 label: `${professional.nombre} ${professional.apellido}`,
               })),
             ]}
-            className="min-w-[210px]"
+            className="w-full sm:min-w-[210px]"
           />
-          <div className="flex gap-0.5 bg-gray-100 rounded-xl p-0.5 ml-auto sm:ml-0">
+          <div className="grid grid-cols-3 gap-0.5 bg-gray-100 rounded-xl p-0.5 sm:flex sm:ml-0">
             {(['month', 'week', 'day'] as ViewMode[]).map((v) => (
               <button key={v} onClick={() => setViewMode(v)}
                 className={`px-2.5 md:px-3 py-1.5 rounded-lg text-[11px] md:text-xs font-semibold transition-all ${viewMode === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -1221,8 +1238,8 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
-          <Button onClick={() => handleSlotClick(format(currentDate, 'yyyy-MM-dd'), 8)} size="sm">
-            <Plus className="w-4 h-4 mr-1.5" /><span className="hidden sm:inline">Nueva Cita</span>
+          <Button onClick={() => handleSlotClick(format(currentDate, 'yyyy-MM-dd'), 8)} size="sm" className="w-full sm:w-auto">
+            <Plus className="w-4 h-4 mr-1.5" /><span>Nueva Cita</span>
           </Button>
         </div>
       </div>
