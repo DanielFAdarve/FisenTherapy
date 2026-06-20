@@ -1,7 +1,8 @@
 import { Alert, Button, Input, Modal, Select, Textarea } from '../../../components/ui/Components';
 import { PatientSearchField } from '../../../components/PatientSearchField';
-import { Appointment, Package as FisentPackage, Patient, Professional } from '../../../domain/models';
+import { Cie10, Appointment, Package as FisentPackage, Patient, Professional } from '../../../domain/models';
 import { AppointmentFormData } from '../../../domain/schemas';
+import { Cie10SearchField } from '../../../components/Cie10SearchField';
 
 interface Props {
   isOpen: boolean;
@@ -17,13 +18,14 @@ interface Props {
   professionals: Professional[];
   patientPackages: FisentPackage[];
   packageCatalog: FisentPackage[];
-  cies: any[];
+  cies: Cie10[];
   newPackage: { id_paquetes_atenciones: number; id_cie_secundario: number };
   onNewPackageChange: (field: 'id_paquetes_atenciones' | 'id_cie_secundario', value: number) => void;
-  onLoadPackageCatalogs: () => void;
+  // onLoadPackageCatalogs: () => void;
   onCreatePackage: () => void;
   onFieldChange: (field: string, value: any) => void;
   onPatientsFound: (patients: Patient[]) => void;
+  onCiesFound: (cies: Cie10[]) => void;
   onSubmit: () => void;
 }
 
@@ -44,10 +46,11 @@ export function AppointmentFormModal({
   cies,
   newPackage,
   onNewPackageChange,
-  onLoadPackageCatalogs,
+  // onLoadPackageCatalogs,
   onCreatePackage,
   onFieldChange,
   onPatientsFound,
+  onCiesFound,
   onSubmit,
 }: Props) {
   return (
@@ -159,7 +162,7 @@ export function AppointmentFormModal({
 
         {form.id_paciente && (
           <div className="rounded-2xl border border-dashed border-teal-200 bg-teal-50/40 p-4">
-            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            {/* <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-bold text-gray-800">Crear paquete para esta cita</p>
                 <p className="text-xs text-gray-500">Solo carga catálogo y CIE10 cuando lo necesitas.</p>
@@ -167,7 +170,11 @@ export function AppointmentFormModal({
               <Button type="button" variant="ghost" size="sm" onClick={onLoadPackageCatalogs}>
                 Cargar catálogo
               </Button>
-            </div>
+            </div> */}
+            <p className="text-sm font-bold text-gray-800 mb-3">Crear paquete para esta cita</p>
+            {catalogLoading && (
+              <p className="text-xs text-amber-700 mb-3">Cargando catálogo y CIE10…</p>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Select
                 label="Tipo de paquete"
@@ -178,14 +185,12 @@ export function AppointmentFormModal({
                   label: `${pkg.descripcion || pkg.nombre} (${pkg.cantidad_sesiones} sesiones)`,
                 }))}
               />
-              <Select
+              <Cie10SearchField
                 label="CIE secundario"
                 value={newPackage.id_cie_secundario || ''}
-                onChange={(event) => onNewPackageChange('id_cie_secundario', Number(event.target.value))}
-                options={cies.map((cie) => ({
-                  value: cie.id,
-                  label: `${cie.codigo} - ${cie.descripcion}`,
-                }))}
+                initialCie={cies.find((cie) => cie.id === newPackage.id_cie_secundario) ?? null}
+                onChange={(cieId) => onNewPackageChange('id_cie_secundario', cieId ? Number(cieId) : 0)}
+                onResults={onCiesFound}
               />
             </div>
             <Button
@@ -193,7 +198,8 @@ export function AppointmentFormModal({
               variant="secondary"
               className="mt-3"
               onClick={onCreatePackage}
-              disabled={catalogLoading}
+              // disabled={catalogLoading}
+              disabled={catalogLoading || !newPackage.id_paquetes_atenciones}
             >
               Crear y seleccionar paquete
             </Button>
