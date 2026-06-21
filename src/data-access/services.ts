@@ -454,6 +454,12 @@ function normalizeAppointmentPayload(data: Partial<AppointmentCreateDTO>) {
 
 function normalizeHistoryQuoteContext(data: any): HistoryQuoteContext {
   const source = data?.response ?? data ?? {};
+  const cie10Paciente = source?.cie10_paciente && Object.keys(source.cie10_paciente).length > 0
+    ? source.cie10_paciente
+    : null;
+  const cie10Historia = source?.cie10_historia && Object.keys(source.cie10_historia).length > 0
+    ? source.cie10_historia
+    : null;
   const flatPatient = source?.nombre || source?.apellido || source?.num_doc ? {
     id: Number(source?.id_paciente ?? source?.id_pacientes ?? source?.patient?.id ?? 0),
     tipo_doc: source?.tipo_doc ?? 'CC',
@@ -475,7 +481,7 @@ function normalizeHistoryQuoteContext(data: any): HistoryQuoteContext {
     antecedentes_farmacologicos: source?.antecedentes_farmacologicos ?? '',
     antecedentes_familiares: source?.antecedentes_familiares ?? '',
     antecedentes_sociales: source?.antecedentes_sociales ?? '',
-    id_cie: source?.cie10_paciente?.id ?? null,
+    id_cie: cie10Paciente?.id ?? null,
     estado: true,
     created_at: '',
     updated_at: '',
@@ -507,7 +513,7 @@ function normalizeHistoryQuoteContext(data: any): HistoryQuoteContext {
   const rawHistory = source?.historia ?? source?.history ?? source?.HistoryQuotes?.[0] ?? (source?.id_historial ? {
     id: source.id_historial,
     id_cita: source.id_cita,
-    id_cie: source?.cie10_historia?.id,
+    id_cie: cie10Historia?.id,
     fecha_evolucion: source?.fecha,
     descripcion_estado_paciente: source?.descripcion_estado_paciente,
     subjetivo: source?.subjetivo,
@@ -515,14 +521,14 @@ function normalizeHistoryQuoteContext(data: any): HistoryQuoteContext {
     intervencion: source?.intervencion,
     recomendaciones: source?.recomendaciones,
     cita: flatQuote,
-    cie10_historia: source?.cie10_historia,
+    cie10_historia: cie10Historia,
   } : null);
   const rawQuote = source?.cita ?? source?.quote ?? source?.Quotes ?? rawHistory?.Quotes ?? rawHistory?.cita ?? flatQuote ?? source;
   const rawPatient = source?.paciente ?? source?.patient ?? flatPatient ?? rawQuote?.patient ?? rawQuote?.paciente ?? rawQuote?.package?.patient ?? rawQuote?.paquete?.patient ?? null;
   const history = rawHistory ? normalizeClinicalHistory({
     ...rawHistory,
     cita: rawHistory?.cita ?? rawHistory?.Quotes ?? rawQuote,
-    cie10_historia: source?.cie10_historia ?? rawHistory?.cie10_historia ?? rawHistory?.Cie10 ?? rawHistory?.cie10,
+    cie10_historia: cie10Historia ?? rawHistory?.cie10_historia ?? rawHistory?.Cie10 ?? rawHistory?.cie10,
   }) : null;
   const quote = rawQuote && (rawQuote.id || rawQuote.id_cita) ? normalizeAppointment(rawQuote) : history?.cita ?? null;
   const patient = rawPatient && typeof rawPatient === 'object' ? rawPatient as Patient : quote?.package?.patient ?? quote?.paquete?.patient ?? null;
@@ -534,8 +540,8 @@ function normalizeHistoryQuoteContext(data: any): HistoryQuoteContext {
     historia: history,
     id_historial: idHistorial,
     tiene_historia: Boolean(source?.tiene_historia ?? idHistorial),
-    cie10_historia: source?.cie10_historia ?? history?.cie10 ?? null,
-    cie10_paciente: source?.cie10_paciente ?? null,
+    cie10_historia: cie10Historia ?? history?.cie10 ?? null,
+    cie10_paciente: cie10Paciente,
   };
 }
 
