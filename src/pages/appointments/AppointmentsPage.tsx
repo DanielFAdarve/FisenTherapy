@@ -276,36 +276,8 @@ export default function AppointmentsPage() {
   }, []);
 
   useEffect(() => {
-    if (!modalOpen || !form.id_profesional || !form.fecha || !form.horario_inicio || !form.horario_fin) {
-      setCollisionWarning(null);
-      return;
-    }
-
-    let isCurrent = true;
-    const timeout = window.setTimeout(async () => {
-      try {
-        const dayAppointments = await getAvailability(form.id_profesional, form.fecha);
-        if (!isCurrent) return;
-        setCollisionWarning(
-          hasScheduleCollision(dayAppointments, form, editingAppt?.id)
-            ? 'El profesional ya tiene citas en ese horario'
-            : null
-        );
-      } catch {
-        if (!isCurrent) return;
-        setCollisionWarning(
-          hasScheduleCollision(appointments, form, editingAppt?.id)
-            ? 'El profesional ya tiene citas en ese horario'
-            : null
-        );
-      }
-    }, 350);
-
-    return () => {
-      isCurrent = false;
-      window.clearTimeout(timeout);
-    };
-  }, [appointments, editingAppt?.id, form.fecha, form.horario_fin, form.horario_inicio, form.id_profesional, getAvailability, modalOpen]);
+    setCollisionWarning(null);
+  }, [form.fecha, form.horario_fin, form.horario_inicio, form.id_profesional, modalOpen]);
 
   const updateField = useCallback((field: string, value: any) => {
     setForm((prev: any) => ({
@@ -352,6 +324,12 @@ export default function AppointmentsPage() {
     if (ciesResult.status === 'fulfilled') setCies(ciesResult.value || []);
   }, [cies.length, packageCatalog.length]);
 
+  useEffect(() => {
+    if (modalOpen) {
+      loadPackageCreationCatalogs();
+    }
+  }, [modalOpen, loadPackageCreationCatalogs]);
+  
   const loadAvailablePackages = useCallback(async (patientId: number, quoteId?: number) => {
     if (!patientId) {
       setPackages([]);
@@ -365,16 +343,16 @@ export default function AppointmentsPage() {
       const currentPackageId = editingAppt ? getAppointmentPackageId(editingAppt) : null;
       const packagesWithCurrent = currentPackage && currentPackageId && !(available || []).some((pkg) => pkg.id === currentPackageId)
         ? [
-            {
-              ...currentPackage,
-              id: currentPackageId,
-              id_paquete: currentPackageId,
-              id_paciente: currentPackage.id_paciente || patientId,
-              id_pacientes: currentPackage.id_pacientes || patientId,
-              tiene_cita_actual: true,
-            },
-            ...(available || []),
-          ]
+          {
+            ...currentPackage,
+            id: currentPackageId,
+            id_paquete: currentPackageId,
+            id_paciente: currentPackage.id_paciente || patientId,
+            id_pacientes: currentPackage.id_pacientes || patientId,
+            tiene_cita_actual: true,
+          },
+          ...(available || []),
+        ]
         : (available || []);
       setPackages(packagesWithCurrent);
       setForm((prev) => {
@@ -449,19 +427,6 @@ export default function AppointmentsPage() {
       });
       setErrors(fieldErrors);
       return;
-    }
-
-    try {
-      const dayAppointments = await getAvailability(result.data.id_profesional, result.data.fecha);
-      if (hasScheduleCollision(dayAppointments, result.data, editingAppt?.id)) {
-        toast.error('Conflicto de agenda: el profesional ya tiene una cita en ese horario');
-        return;
-      }
-    } catch {
-      if (hasScheduleCollision(appointments, result.data, editingAppt?.id)) {
-        toast.error('Conflicto de agenda: el profesional ya tiene una cita en ese horario');
-        return;
-      }
     }
 
     const pkg = packages.find((p) => p.id === result.data.id_paquete);
@@ -606,7 +571,7 @@ export default function AppointmentsPage() {
         cies={cies}
         newPackage={newPackage}
         onNewPackageChange={(field, value) => setNewPackage((prev) => ({ ...prev, [field]: value }))}
-        onLoadPackageCatalogs={loadPackageCreationCatalogs}
+        // onLoadPackageCatalogs={loadPackageCreationCatalogs}
         onCreatePackage={handleCreatePackage}
         onFieldChange={updateField}
         onPatientsFound={mergePatients}
