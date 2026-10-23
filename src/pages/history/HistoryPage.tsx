@@ -3,8 +3,8 @@
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { historyService, appointmentService, cie10Service, patientService } from '../../data-access/services';
-import { ClinicalHistory, Appointment, Cie10, Patient, HistoryQuoteContext } from '../../domain/models';
+import { historyService, trainingSessionHistoryService, appointmentService, cie10Service } from '../../data-access/services';
+import { ClinicalHistory, Appointment, Cie10, Patient, HistoryQuoteContext, isTrainingHistory } from '../../domain/models';
 import { Card, Button, TableSkeleton, EmptyState, PageHeader } from '../../components/ui/Components';
 import { PatientSearchField } from '../../components/PatientSearchField';
 import { FileText, Plus } from 'lucide-react';
@@ -138,16 +138,21 @@ export default function HistoryPage() {
   const downloadHistory = async (history: ClinicalHistory) => {
     setExportingId(history.id);
     try {
-      const blob = await historyService.exportDocument(history.id);
+      const trainingSession = isTrainingHistory(history);
+      const blob = trainingSession
+        ? await trainingSessionHistoryService.exportDocument(history.id)
+        : await historyService.exportDocument(history.id);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `historia-clinica-${history.id}.docx`;
+      link.download = trainingSession
+        ? `sesion-entrenamiento-${history.id}.docx`
+        : `historia-clinica-${history.id}.docx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      toast.success('Documento DOCX generado');
+      toast.success(trainingSession ? 'Sesión de entrenamiento exportada' : 'Documento DOCX generado');
     } catch (err: any) {
       toast.error(err?.message || 'No se pudo generar el DOCX');
     } finally {

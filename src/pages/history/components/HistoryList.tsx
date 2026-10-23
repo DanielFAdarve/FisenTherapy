@@ -1,4 +1,4 @@
-import { ClinicalHistory } from '../../../domain/models';
+import { ClinicalHistory, isTrainingHistory } from '../../../domain/models';
 import { Card, Badge, Button } from '../../../components/ui/Components';
 import { Edit2, Download } from 'lucide-react';
 import { formatHistoryDate } from '../../../utils/dates'; // Puedes mover la función auxiliar aquí
@@ -15,7 +15,7 @@ export function HistoryList({ histories, exportingId, onEdit, onDownload }: Hist
     <div className="space-y-4">
       {histories.map((h) => (
         <Card key={h.id} className="overflow-hidden" hover>
-          <div className="h-1 bg-gradient-to-r from-teal-500 to-emerald-500" />
+          <div className={`h-1 ${isTrainingHistory(h) ? 'bg-indigo-500' : 'bg-gradient-to-r from-teal-500 to-emerald-500'}`} />
           <div className="p-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-3">
               <div>
@@ -33,6 +33,7 @@ export function HistoryList({ histories, exportingId, onEdit, onDownload }: Hist
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {isTrainingHistory(h) && <Badge variant="info">Sesión de entrenamiento</Badge>}
                 {h.antecedentes_sincronizados && <Badge variant="info">Antecedentes sync</Badge>}
                 <span className="text-xs text-gray-400">{formatHistoryDate(h.created_at)}</span>
                 <Button size="sm" variant="outline" onClick={() => onEdit(h)}>
@@ -45,7 +46,9 @@ export function HistoryList({ histories, exportingId, onEdit, onDownload }: Hist
             </div>
             <div className="bg-gradient-to-r from-gray-50 to-teal-50/20 rounded-xl p-4">
               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {h.evolucion || h.descripcion_estado_paciente || 'Sin resumen registrado'}
+                {isTrainingHistory(h)
+                  ? h.objetivo_sesion || h.observaciones_generales || h.descripcion_estado_paciente || 'Sesión de entrenamiento registrada'
+                  : h.evolucion || h.descripcion_estado_paciente || 'Sin resumen registrado'}
               </p>
             </div>
           </div>
