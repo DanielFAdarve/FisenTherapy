@@ -286,6 +286,7 @@ export interface Appointment {
   HistoryQuotes?: ClinicalHistory[];
   agendamiento?: AppointmentSchedulingSummary;
   tipo_paquete?: string;
+  id_tipo_paquete?: number | null;
   sesiones_totales_paquete?: number;
   tiene_historia?: boolean;
   id_historial?: number | null;
@@ -328,6 +329,73 @@ export interface ClinicalHistory {
   cie10?: Cie10;
   Cie10?: Cie10;
   Quotes?: Appointment;
+  tipo_historia?: 'CLINICA' | 'SESION_ENTRENAMIENTO';
+}
+
+export interface TrainingExercise {
+  ejercicio: string;
+  series?: number | null;
+  repeticiones?: number | null;
+  carga_kg?: number | null;
+  observaciones?: string | null;
+}
+
+export interface TrainingExerciseGroup {
+  grupo: string;
+  ejercicios: TrainingExercise[];
+}
+
+export interface TrainingSessionHistory extends ClinicalHistory {
+  tipo_historia: 'SESION_ENTRENAMIENTO';
+  objetivo_sesion?: string | null;
+  grupos_ejercicios: TrainingExerciseGroup[];
+  agentes_biofisicos: Record<string, unknown>;
+  notas_ejercicios?: string | null;
+  notas_agentes_biofisicos?: string | null;
+  tiempo_total_ejercicio_minutos?: number | null;
+  carga_total_levantada_kg?: number | null;
+  dolor_pre_sesion?: number | null;
+  dolor_post_sesion?: number | null;
+  respuesta_inmediata: Record<string, unknown>;
+  recomendaciones_sesion: string[];
+  observaciones_generales?: string | null;
+}
+
+export interface TrainingSessionHistoryDTO {
+  id_cita: number;
+  id_cie?: number;
+  fecha_evolucion?: string;
+  objetivo_sesion?: string;
+  grupos_ejercicios?: TrainingExerciseGroup[];
+  agentes_biofisicos?: Record<string, unknown>;
+  notas_ejercicios?: string;
+  notas_agentes_biofisicos?: string;
+  tiempo_total_ejercicio_minutos?: number | null;
+  carga_total_levantada_kg?: number | null;
+  dolor_pre_sesion?: number | null;
+  dolor_post_sesion?: number | null;
+  respuesta_inmediata?: Record<string, unknown>;
+  recomendaciones_sesion?: string[];
+  observaciones_generales?: string;
+}
+
+export const TRAINING_ATTENTION_PACKAGE_ID = 14;
+
+export function isTrainingAppointment(appointment?: Appointment | null): boolean {
+  if (!appointment) return false;
+
+  const packageId = appointment.id_tipo_paquete
+    ?? appointment.package?.id_tipo_paquete
+    ?? appointment.package?.attentionPackage?.id
+    ?? appointment.paquete?.id_tipo_paquete
+    ?? appointment.paquete?.attentionPackage?.id;
+
+  return Number(packageId) === TRAINING_ATTENTION_PACKAGE_ID;
+}
+
+export function isTrainingHistory(history?: ClinicalHistory | null): history is TrainingSessionHistory {
+  return history?.tipo_historia === 'SESION_ENTRENAMIENTO'
+    || isTrainingAppointment(history?.cita ?? history?.Quotes);
 }
 
 export interface HistoryQuoteContext {

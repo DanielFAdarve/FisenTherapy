@@ -11,6 +11,7 @@ import {
   Professional,
   Appointment, AppointmentCreateDTO, AppointmentUpdateDTO,
   ClinicalHistory, ClinicalHistoryCreateDTO,
+  TrainingSessionHistory, TrainingSessionHistoryDTO,
   Cie10, Cie10CreateDTO, PackageAttentionCatalog,
   Payment, PaymentCreateDTO, PaymentSummary,
   PaginationParams, PaginatedResult, ReportQueryParams, DashboardReport, RevenueByMonth,
@@ -227,6 +228,32 @@ export const historyService = {
   },
   exportDocument: async (id: number) => {
     const res = await api.get<Blob>(`/history/export-docx/${id}`, { responseType: 'blob' });
+    return res.data;
+  },
+};
+
+// --- Training Session History Service ---
+export const trainingSessionHistoryService = {
+  getById: async (id: number): Promise<TrainingSessionHistory> => {
+    const res = await api.get<BackendResponse<any>>(`/history/sesion-entrenamiento/${id}`);
+    return normalizeTrainingSessionHistory(res.data.response);
+  },
+  create: async (data: TrainingSessionHistoryDTO): Promise<TrainingSessionHistory> => {
+    const res = await api.post<BackendResponse<any>>(
+      '/history/sesion-entrenamiento/create',
+      normalizeTrainingSessionHistoryPayload(data),
+    );
+    return normalizeTrainingSessionHistory(res.data.response);
+  },
+  update: async (id: number, data: Partial<TrainingSessionHistoryDTO>): Promise<TrainingSessionHistory> => {
+    const res = await api.put<BackendResponse<any>>(
+      `/history/sesion-entrenamiento/update/${id}`,
+      normalizeTrainingSessionHistoryPayload(data),
+    );
+    return normalizeTrainingSessionHistory(res.data.response);
+  },
+  exportDocument: async (id: number) => {
+    const res = await api.get<Blob>(`/history/sesion-entrenamiento/export-docx/${id}`, { responseType: 'blob' });
     return res.data;
   },
 };
@@ -491,6 +518,7 @@ function normalizeHistoryQuoteContext(data: any): HistoryQuoteContext {
     id_paciente: flatPatient?.id ?? source?.id_paciente ?? 0,
     id_profesional: source?.id_profesional ?? 0,
     id_paquete: source?.id_paquete ?? null,
+    id_tipo_paquete: source?.id_tipo_paquete ?? null,
     fecha: source?.fecha,
     horario_inicio: source?.hora_inicio,
     horario_fin: source?.hora_fin,
@@ -572,6 +600,46 @@ function normalizeClinicalHistory(data: any): ClinicalHistory {
     cita: quote ? normalizeAppointment(quote) : source?.cita,
     cie10: cie,
   } as ClinicalHistory;
+}
+
+function normalizeTrainingSessionHistory(data: any): TrainingSessionHistory {
+  const history = normalizeClinicalHistory(data);
+  const source = data?.historia ?? data?.history ?? data ?? {};
+
+  return {
+    ...history,
+    tipo_historia: 'SESION_ENTRENAMIENTO',
+    objetivo_sesion: source?.objetivo_sesion ?? null,
+    grupos_ejercicios: Array.isArray(source?.grupos_ejercicios) ? source.grupos_ejercicios : [],
+    agentes_biofisicos: source?.agentes_biofisicos && typeof source.agentes_biofisicos === 'object'
+      ? source.agentes_biofisicos
+      : {},
+    notas_ejercicios: source?.notas_ejercicios ?? null,
+    notas_agentes_biofisicos: source?.notas_agentes_biofisicos ?? null,
+    tiempo_total_ejercicio_minutos: optionalNumber(source?.tiempo_total_ejercicio_minutos),
+    carga_total_levantada_kg: optionalNumber(source?.carga_total_levantada_kg),
+    dolor_pre_sesion: optionalNumber(source?.dolor_pre_sesion),
+    dolor_post_sesion: optionalNumber(source?.dolor_post_sesion),
+    respuesta_inmediata: source?.respuesta_inmediata && typeof source.respuesta_inmediata === 'object'
+      ? source.respuesta_inmediata
+      : {},
+    recomendaciones_sesion: Array.isArray(source?.recomendaciones_sesion) ? source.recomendaciones_sesion : [],
+    observaciones_generales: source?.observaciones_generales ?? null,
+  };
+}
+
+function normalizeTrainingSessionHistoryPayload(data: Partial<TrainingSessionHistoryDTO>) {
+  const payload: Record<string, unknown> = { ...data };
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined) delete payload[key];
+  });
+  return payload;
+}
+
+function optionalNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeClinicalHistoryPayload(data: Partial<ClinicalHistoryCreateDTO>) {
