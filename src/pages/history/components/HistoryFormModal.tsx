@@ -1,8 +1,8 @@
 // ============================================================
 // components/history/HistoryFormModal.tsx
 // ============================================================
-import { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
-import { ClinicalHistory, Appointment, Cie10, Patient, HistoryQuoteContext } from '../../../domain/models';
+import { useState, useEffect, FormEvent, useCallback, useRef } from 'react';
+import { ClinicalHistory, Appointment, Cie10, Patient, HistoryQuoteContext, isTrainingAppointment, isTrainingHistory } from '../../../domain/models';
 import { clinicalHistorySchema, ClinicalHistoryFormData } from '../../../domain/schemas';
 import { historyService, patientService, appointmentService } from '../../../data-access/services';
 import { Modal, Button, Textarea, Alert, Badge } from '../../../components/ui/Components';
@@ -11,6 +11,7 @@ import { Cie10SearchField } from '../../../components/Cie10SearchField';
 import toast from 'react-hot-toast';
 import { Download, Search } from 'lucide-react';
 import { AppointmentSearchModal } from './AppointmentSearchModal';
+import { TrainingSessionForm } from './TrainingSessionForm';
 
 interface HistoryFormModalProps {
   isOpen: boolean;
@@ -82,9 +83,6 @@ const patientBackgroundToForm = (patient?: Patient | null): Partial<ClinicalHist
   antecedentes_sincronizados: Boolean(patient),
 });
 
-const appointmentLabel = (a: Appointment) =>
-  `#${a.id} - ${a.paciente_nombre || a.paciente || 'Paciente'} (${a.fecha?.split('T')[0] || 'sin fecha'})`;
-
 export function HistoryFormModal({
   isOpen,
   onClose,
@@ -103,8 +101,6 @@ export function HistoryFormModal({
   const [saving, setSaving] = useState(false);
   const [loadingBackground, setLoadingBackground] = useState(false);
   const [loadedHistory, setLoadedHistory] = useState<ClinicalHistory | null>(null);
-  const [appointmentQuery, setAppointmentQuery] = useState('');
-  const [appointmentPickerOpen, setAppointmentPickerOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [appointmentSearchOpen, setAppointmentSearchOpen] = useState(false);
   const initKeyRef = useRef('');
@@ -130,8 +126,6 @@ export function HistoryFormModal({
     const init = async () => {
       setSelectedAppointmentState(null);
       setLoadedHistory(null);
-      setAppointmentQuery('');
-      setAppointmentPickerOpen(false);
       // setLoadedHistory(null);
       // setAppointmentQuery('');
       // setAppointmentPickerOpen(!editingHistory && !quoteContext?.cita);
@@ -290,25 +284,6 @@ export function HistoryFormModal({
   };
 
 
-  const filteredAppointments = useMemo(() => {
-    const normalizedQuery = appointmentQuery.trim().toLowerCase();
-    if (!normalizedQuery) return appointments.slice(0, 8);
-    return appointments.filter((appointment) => {
-      const label = [
-        appointment.id,
-        appointment.paciente_nombre,
-        appointment.paciente,
-        appointment.num_doc_paciente,
-        appointment.profesional_nombre,
-        appointment.profesional,
-        appointment.fecha,
-        appointment.motivo,
-        appointment.observaciones,
-      ].filter(Boolean).join(' ').toLowerCase();
-      return label.includes(normalizedQuery);
-    }).slice(0, 12);
-  }, [appointmentQuery, appointments]);
-
   // const selectAppointment = (appointmentId: number) => {
   //   updateField('id_cita', appointmentId);
   //   setAppointmentPickerOpen(false);
@@ -327,6 +302,37 @@ export function HistoryFormModal({
   // Pre-cargar filtros para el modal de búsqueda
   const selectedPatientId = selectedAppointment?.id_paciente ?? undefined;
   const selectedProfessionalId = selectedAppointment?.id_profesional ?? undefined;
+  const isTrainingSession = isTrainingAppointment(selectedAppointment) || isTrainingHistory(activeHistory);
+
+  if (isTrainingSession && selectedAppointment) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title={activeHistory ? 'Editar Sesión de Entrenamiento' : 'Nueva Sesión de Entrenamiento'} size="xl">
+        <TrainingSessionForm
+          isOpen={isOpen}
+          appointment={selectedAppointment}
+          initialHistory={activeHistory}
+          initialCie={activeHistory?.cie10 ?? activeHistory?.Cie10 ?? quoteContext?.cie10_historia ?? quoteContext?.cie10_paciente ?? null}
+          onCieResults={mergeCies}
+          onChangeAppointment={() => setAppointmentSearchOpen(true)}
+          onCancel={onClose}
+          onSave={onSave}
+        />
+        <AppointmentSearchModal
+          isOpen={appointmentSearchOpen}
+          onClose={() => setAppointmentSearchOpen(false)}
+          onSelect={(appointment) => {
+            mergeAppointment(appointment);
+            setSelectedAppointmentState(appointment);
+            updateField('id_cita', appointment.id);
+            if (!editingHistory) hydrateBackgroundFromAppointment(appointment.id);
+            setAppointmentSearchOpen(false);
+          }}
+          defaultPatientId={selectedPatientId}
+          defaultProfessionalId={selectedProfessionalId}
+        />
+      </Modal>
+    );
+  }
 
 
   return (
